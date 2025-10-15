@@ -1,3 +1,7 @@
+import os
+# Fix for OpenMP library conflict
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
 import sys
 from PyQt5 import QtWidgets
 import numpy as np
