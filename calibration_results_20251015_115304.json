@@ -1,0 +1,38 @@
+{
+    "timestamp": "2025-10-15 11:53:04",
+    "raw_parameters": {
+        "centerRow": 285.1272192943719,
+        "centerCol": 767.5093275540752,
+        "sod": 1405.9718236463439,
+        "odd": 394.04008957465715,
+        "psi": -1.0201122448853015,
+        "theta": -1.854687472184337,
+        "phi": 1.3422020665744536,
+        "r": -92.95487685939216,
+        "z_0": 63.35545347206083,
+        "phase": 85.2335398915157
+    },
+    "derived_parameters": {
+        "detector_horizontal_center": 1800.0119132210011,
+        "detector_vertical_center": 1405.9718236463439,
+        "detector_horizontal_offset": 0.009327554075184707,
+        "detector_vertical_offset": -482.3727807056281,
+        "detector_in_plane_rotation_angle": -1.854687472184337,
+        "detector_horizontal_rotation_angle": -1.0201122448853015,
+        "detector_vertical_rotation_angle": 1.3422020665744536
+    },
+    "optimization_info": {
+        "final_cost": 1.875953197479248,
+        "initial_cost": 79662.375,
+        "success": true,
+        "message": "`xtol` termination condition is satisfied."
+    },
+    "geometry_info": {
+        "numRows": 1536,
+        "numCols": 1536,
+        "numAngles": 120,
+        "pixelSize": 0.278,
+        "sod": 1400.0,
+        "sdd": 1794.0
+    }
+}

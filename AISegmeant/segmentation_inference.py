@@ -88,6 +88,34 @@ class UnetSegmentationInference:
         # 获取原图的affine矩阵用于保存配准
         affine = nib.load(input_path).affine
         return input_tensor, affine
+    
+    def preprocess_array(self, input_array, affine=None):
+        """
+        预处理输入numpy数组
+        
+        Args:
+            input_array (np.ndarray): 输入的3D numpy数组
+            affine (np.ndarray, optional): affine矩阵，如果为None则使用单位矩阵
+        
+        Returns:
+            tuple: (预处理后的张量, affine矩阵)
+        """
+        # 确保输入是float32类型
+        if input_array.dtype != np.float32:
+            input_array = input_array.astype(np.float32)
+        
+        # 归一化到[0, 1]
+        if input_array.max() > 1.0:
+            input_array = input_array / input_array.max()
+        
+        # 添加batch和channel维度: (D, H, W) -> (1, 1, D, H, W)
+        input_tensor = torch.from_numpy(input_array).unsqueeze(0).unsqueeze(0).to(torch.float32)
+        
+        # 如果没有提供affine矩阵，使用单位矩阵
+        if affine is None:
+            affine = np.eye(4)
+        
+        return input_tensor, affine
 
     def inference(self, input_tensor):
         """
@@ -171,6 +199,27 @@ class UnetSegmentationInference:
         # 推理
         output_np = self.inference(input_tensor)
 
+        # 保存结果
+        return self.save_result(output_np, affine, output_filename)
+    
+    def run_from_array(self, input_array, affine=None, output_filename="pred_single.nii.gz"):
+        """
+        从numpy数组完整的推理过程：预处理、推理和保存结果
+        
+        Args:
+            input_array (np.ndarray): 输入的3D numpy数组
+            affine (np.ndarray, optional): affine矩阵
+            output_filename (str): 输出文件名
+        
+        Returns:
+            str: 保存的预测结果文件路径
+        """
+        # 预处理数组
+        input_tensor, affine = self.preprocess_array(input_array, affine)
+        
+        # 推理
+        output_np = self.inference(input_tensor)
+        
         # 保存结果
         return self.save_result(output_np, affine, output_filename)
 

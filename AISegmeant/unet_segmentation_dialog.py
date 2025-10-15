@@ -8,17 +8,19 @@ import os
 class UnetSegmentationDialog(QtWidgets.QDialog):
     """UNet分割对话框 - 用于获取基线方法的参数"""
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, current_data=None):
         super().__init__(parent)
         self.parent = parent
+        self.current_data = current_data  # 当前已加载的数据
         self.setWindowTitle("人工智能分割 - 基线方法 (UNet)")
         self.setMinimumWidth(700)
-        self.setMinimumHeight(400)
+        self.setMinimumHeight(450)
         
         # 结果变量
         self.checkpoint_path = None
         self.output_dir = None
         self.input_file = None
+        self.use_current_data = False  # 是否使用当前数据
         self.roi_size = (128, 128, 128)  # 滑窗尺寸
         self.sw_batch_size = 1  # 滑窗批量大小
         self.overlay_with_original = False  # 是否与原始图像融合显示
@@ -31,8 +33,32 @@ class UnetSegmentationDialog(QtWidgets.QDialog):
         param_layout = QtWidgets.QGridLayout()
         param_group.setLayout(param_layout)
         
-        # 输入文件选择
+        # 输入数据源选择
         row = 0
+        param_layout.addWidget(QtWidgets.QLabel("数据来源:"), row, 0)
+        
+        source_layout = QtWidgets.QHBoxLayout()
+        self.use_current_radio = QtWidgets.QRadioButton("使用当前已加载数据")
+        self.use_file_radio = QtWidgets.QRadioButton("从文件加载")
+        
+        # 如果有当前数据，默认选择使用当前数据
+        if current_data is not None:
+            self.use_current_radio.setChecked(True)
+            self.use_current_radio.setToolTip("使用主界面中已加载的CT数据")
+        else:
+            self.use_current_radio.setEnabled(False)
+            self.use_file_radio.setChecked(True)
+        
+        source_layout.addWidget(self.use_current_radio)
+        source_layout.addWidget(self.use_file_radio)
+        source_layout.addStretch()
+        
+        source_widget = QtWidgets.QWidget()
+        source_widget.setLayout(source_layout)
+        param_layout.addWidget(source_widget, row, 1, 1, 2)
+        
+        # 输入文件选择（当选择从文件加载时使用）
+        row += 1
         param_layout.addWidget(QtWidgets.QLabel("输入文件 (*.nii.gz):"), row, 0)
         self.input_file_edit = QtWidgets.QLineEdit()
         self.input_file_edit.setPlaceholderText("选择待分割的NIfTI文件...")
@@ -41,6 +67,13 @@ class UnetSegmentationDialog(QtWidgets.QDialog):
         browse_input_btn = QtWidgets.QPushButton("浏览...")
         browse_input_btn.clicked.connect(self.browse_input_file)
         param_layout.addWidget(browse_input_btn, row, 2)
+        
+        # 连接信号，当选择数据源时启用/禁用文件选择
+        self.use_current_radio.toggled.connect(self.on_source_changed)
+        self.use_file_radio.toggled.connect(self.on_source_changed)
+        
+        # 根据初始状态设置文件选择控件的启用状态
+        self.on_source_changed()
         
         # 模型权重文件选择
         row += 1
@@ -179,6 +212,28 @@ class UnetSegmentationDialog(QtWidgets.QDialog):
         
         main_layout.addLayout(button_layout)
     
+    def on_source_changed(self):
+        """当数据源选择改变时"""
+        use_file = self.use_file_radio.isChecked()
+        self.input_file_edit.setEnabled(use_file)
+        # 查找浏览按钮（第row=1行，第2列的按钮）
+        for i in range(self.layout().count()):
+            item = self.layout().itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                if isinstance(widget, QtWidgets.QGroupBox):
+                    layout = widget.layout()
+                    if layout:
+                        # 找到浏览按钮并设置启用状态
+                        for j in range(layout.count()):
+                            child_item = layout.itemAt(j)
+                            if child_item and child_item.widget():
+                                child_widget = child_item.widget()
+                                if isinstance(child_widget, QtWidgets.QPushButton) and child_widget.text() == "浏览...":
+                                    # 找到第一个浏览按钮（输入文件的）
+                                    child_widget.setEnabled(use_file)
+                                    return
+    
     def browse_input_file(self):
         """浏览输入文件"""
         filename, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -213,23 +268,40 @@ class UnetSegmentationDialog(QtWidgets.QDialog):
     
     def validate_and_accept(self):
         """验证输入并接受对话框"""
-        # 检查输入文件
-        input_file = self.input_file_edit.text().strip()
-        if not input_file:
-            QtWidgets.QMessageBox.warning(
-                self,
-                "输入错误",
-                "请选择输入文件！"
-            )
-            return
+        # 判断是否使用当前数据
+        self.use_current_data = self.use_current_radio.isChecked()
         
-        if not os.path.exists(input_file):
-            QtWidgets.QMessageBox.warning(
-                self,
-                "输入错误",
-                f"输入文件不存在：\n{input_file}"
-            )
-            return
+        # 检查输入数据
+        if self.use_current_data:
+            # 使用当前数据，不需要检查文件
+            if self.current_data is None:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "输入错误",
+                    "当前没有已加载的数据！请先在主界面加载数据。"
+                )
+                return
+            self.input_file = None  # 不使用文件
+        else:
+            # 从文件加载，需要检查文件路径
+            input_file = self.input_file_edit.text().strip()
+            if not input_file:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "输入错误",
+                    "请选择输入文件！"
+                )
+                return
+            
+            if not os.path.exists(input_file):
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "输入错误",
+                    f"输入文件不存在：\n{input_file}"
+                )
+                return
+            
+            self.input_file = input_file
         
         # 检查模型权重文件
         checkpoint_path = self.checkpoint_edit.text().strip()
@@ -259,8 +331,7 @@ class UnetSegmentationDialog(QtWidgets.QDialog):
             )
             return
         
-        # 保存参数
-        self.input_file = input_file
+        # 保存其他参数
         self.checkpoint_path = checkpoint_path
         self.output_dir = output_dir
         self.roi_size = (
@@ -287,6 +358,8 @@ class UnetSegmentationDialog(QtWidgets.QDialog):
         }
         
         return {
+            'use_current_data': self.use_current_data,
+            'current_data': self.current_data if self.use_current_data else None,
             'input_file': self.input_file,
             'checkpoint_path': self.checkpoint_path,
             'output_dir': self.output_dir,

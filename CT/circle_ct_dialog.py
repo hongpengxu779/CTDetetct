@@ -315,7 +315,7 @@ class CircleCTReconstructionDialog(QtWidgets.QDialog):
             from File.FileOperation import loadDICOMImages
             
             # 加载DICOM图像
-            g_loaded = loadDICOMImages(data_path)
+            g_loaded, dicom_info = loadDICOMImages(data_path)
             
             # 确保数据形状匹配
             if g_loaded.shape != g.shape:

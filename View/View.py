@@ -851,7 +851,7 @@ class VolumeViewer(QtWidgets.QFrame):
 
 
 
-class CTViewer4(QtWidgets.QWidget):
+class CTViewer4(QtWidgets.QMainWindow):
     """
     四宫格 CT 浏览器：
     - 左上：Axial（横断面）切片 + 滑动条
@@ -880,7 +880,10 @@ class CTViewer4(QtWidgets.QWidget):
             原始数据类型，默认 16 位无符号整型。
         """
         super().__init__()
-        self.setWindowTitle("CT Viewer - 四宫格 + VTK 体渲染")
+        self.setWindowTitle("工业CT智能软件")
+        
+        # 应用样式表
+        self.apply_stylesheet()
         
         # 创建菜单栏
         self.create_menu()
@@ -892,17 +895,163 @@ class CTViewer4(QtWidgets.QWidget):
         if filename:
             self.load_data(filename, shape, spacing, dtype)
     
+    def apply_stylesheet(self):
+        """应用样式表以美化界面"""
+        stylesheet = """
+        QMainWindow {
+            background-color: #f5f5f5;
+        }
+        
+        QWidget {
+            background-color: #f5f5f5;
+        }
+        
+        QMenuBar {
+            background-color: #ffffff;
+            border-bottom: 1px solid #d0d0d0;
+            padding: 2px 4px;
+            min-height: 28px;
+            spacing: 3px;
+        }
+        
+        QMenuBar::item {
+            background-color: transparent;
+            padding: 6px 12px;
+            border-radius: 4px;
+            margin: 0px;
+        }
+        
+        QMenuBar::item:selected {
+            background-color: #e3f2fd;
+        }
+        
+        QMenuBar::item:pressed {
+            background-color: #bbdefb;
+        }
+        
+        QMenu {
+            background-color: #ffffff;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+        }
+        
+        QMenu::item {
+            padding: 6px 25px;
+        }
+        
+        QMenu::item:selected {
+            background-color: #e3f2fd;
+        }
+        
+        QGroupBox {
+            background-color: #ffffff;
+            border: 1px solid #d0d0d0;
+            border-radius: 6px;
+            margin-top: 10px;
+            padding-top: 10px;
+            font-weight: bold;
+        }
+        
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            padding: 4px 8px;
+            background-color: #ffffff;
+            border-radius: 3px;
+        }
+        
+        QPushButton {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 16px;
+            font-weight: 500;
+        }
+        
+        QPushButton:hover {
+            background-color: #1976D2;
+        }
+        
+        QPushButton:pressed {
+            background-color: #0D47A1;
+        }
+        
+        QPushButton:disabled {
+            background-color: #BDBDBD;
+        }
+        
+        QSlider::groove:horizontal {
+            border: 1px solid #BDBDBD;
+            height: 6px;
+            background: #E0E0E0;
+            border-radius: 3px;
+        }
+        
+        QSlider::handle:horizontal {
+            background: #2196F3;
+            border: 1px solid #1976D2;
+            width: 16px;
+            height: 16px;
+            margin: -6px 0;
+            border-radius: 8px;
+        }
+        
+        QSlider::handle:horizontal:hover {
+            background: #1976D2;
+        }
+        
+        QLabel {
+            color: #424242;
+        }
+        
+        QLineEdit {
+            background-color: #ffffff;
+            border: 1px solid #BDBDBD;
+            border-radius: 4px;
+            padding: 6px;
+        }
+        
+        QLineEdit:focus {
+            border: 2px solid #2196F3;
+        }
+        
+        QSpinBox, QDoubleSpinBox {
+            background-color: #ffffff;
+            border: 1px solid #BDBDBD;
+            border-radius: 4px;
+            padding: 4px;
+        }
+        
+        QSpinBox:focus, QDoubleSpinBox:focus {
+            border: 2px solid #2196F3;
+        }
+        
+        QRadioButton {
+            spacing: 8px;
+        }
+        
+        QRadioButton::indicator {
+            width: 16px;
+            height: 16px;
+        }
+        
+        QCheckBox {
+            spacing: 8px;
+        }
+        
+        QCheckBox::indicator {
+            width: 18px;
+            height: 18px;
+        }
+        """
+        self.setStyleSheet(stylesheet)
+    
     def create_menu(self):
         """创建菜单栏"""
-        # 主布局是垂直布局：菜单栏在上，四宫格在下
-        self.main_layout = QtWidgets.QVBoxLayout()
-        self.main_layout.setContentsMargins(0, 0, 0, 0)  # 减少边距
-        self.main_layout.setSpacing(0)  # 减少间距
-        self.setLayout(self.main_layout)
-        
         # 创建菜单栏
         self.menu_bar = QtWidgets.QMenuBar()
-        self.menu_bar.setMaximumHeight(30)  # 限制菜单栏高度
+        self.menu_bar.setNativeMenuBar(False)  # 禁用原生菜单栏，确保菜单栏始终显示
         
         # 文件菜单
         file_menu = self.menu_bar.addMenu("文件")
@@ -940,20 +1089,28 @@ class CTViewer4(QtWidgets.QWidget):
         unet_action.triggered.connect(self.run_unet_segmentation)
         ai_menu.addAction(unet_action)
         
-        # 将菜单栏添加到主布局
-        self.main_layout.addWidget(self.menu_bar)
+        # 配准菜单（占位）
+        config_menu = self.menu_bar.addMenu("配准")
+        
+        # 使用QMainWindow的setMenuBar方法，菜单栏会自动显示在窗口顶部
+        self.setMenuBar(self.menu_bar)
     
     def init_ui(self):
         """初始化界面布局"""
-        # 创建水平分割器：左侧是控制面板，右侧是视图
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        # 创建主水平分割器：左侧工具栏 | 中间视图 | 右侧面板
+        main_splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
         
         # 创建左侧工具栏（垂直布局）
         self.left_toolbar = QtWidgets.QWidget()
         self.left_toolbar.setMaximumWidth(220)
         self.left_toolbar.setMinimumWidth(180)
+        self.left_toolbar.setStyleSheet("""
+            QWidget {
+                background-color: #eceff1;
+            }
+        """)
         toolbar_layout = QtWidgets.QVBoxLayout(self.left_toolbar)
-        toolbar_layout.setContentsMargins(5, 5, 5, 5)
+        toolbar_layout.setContentsMargins(8, 8, 8, 8)
         toolbar_layout.setSpacing(10)
         
         # 创建窗宽窗位分组框
@@ -1010,36 +1167,147 @@ class CTViewer4(QtWidgets.QWidget):
         toolbar_layout.addWidget(ww_wl_group)
         toolbar_layout.addStretch()
         
-        # 将左侧工具栏添加到分割器（默认显示）
-        splitter.addWidget(self.left_toolbar)
+        # 将左侧工具栏添加到主分割器
+        main_splitter.addWidget(self.left_toolbar)
         
         # 保存引用（兼容旧代码）
         self.ww_wl_panel = self.left_toolbar
         
-        # 创建右侧视图区域
+        # 创建中间视图区域
         self.grid_widget = QtWidgets.QWidget()
+        self.grid_widget.setStyleSheet("background-color: #ffffff;")
         self.grid_layout = QtWidgets.QGridLayout(self.grid_widget)
+        self.grid_layout.setSpacing(2)
+        self.grid_layout.setContentsMargins(2, 2, 2, 2)
         
-        # 将右侧视图区域添加到分割器
-        splitter.addWidget(self.grid_widget)
+        # 将中间视图区域添加到主分割器
+        main_splitter.addWidget(self.grid_widget)
         
-        # 设置分割器的初始尺寸比例（左侧固定，右侧自适应）
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
+        # 创建右侧面板（垂直分割成上下两部分）
+        self.right_panel = QtWidgets.QWidget()
+        self.right_panel.setMaximumWidth(280)
+        self.right_panel.setMinimumWidth(200)
+        self.right_panel.setStyleSheet("background-color: #eceff1;")  # 浅灰色背景
+        right_panel_layout = QtWidgets.QVBoxLayout(self.right_panel)
+        right_panel_layout.setContentsMargins(5, 5, 5, 5)
+        right_panel_layout.setSpacing(10)  # 增加两个面板之间的间距
         
-        # 将分割器添加到主布局
-        self.main_layout.addWidget(splitter)
+        # 热磁图层面板（上半部分）
+        heatmap_panel = QtWidgets.QWidget()
+        heatmap_panel.setStyleSheet("""
+            QWidget {
+                background-color: #b0bec5;
+                border: 2px solid #78909c;
+                border-radius: 6px;
+            }
+        """)
+        heatmap_layout = QtWidgets.QVBoxLayout(heatmap_panel)
+        heatmap_layout.setContentsMargins(10, 10, 10, 10)
+        heatmap_label = QtWidgets.QLabel("热磁图层")
+        heatmap_label.setStyleSheet("""
+            QLabel {
+                color: #37474f; 
+                font-size: 12pt; 
+                font-weight: bold;
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        heatmap_label.setAlignment(QtCore.Qt.AlignCenter)
+        heatmap_layout.addWidget(heatmap_label)
+        heatmap_layout.addStretch()
         
-        # 初始时显示空白区域
+        # 灰度直方图面板（下半部分）
+        histogram_panel = QtWidgets.QWidget()
+        histogram_panel.setStyleSheet("""
+            QWidget {
+                background-color: #b0bec5;
+                border: 2px solid #78909c;
+                border-radius: 6px;
+            }
+        """)
+        histogram_layout = QtWidgets.QVBoxLayout(histogram_panel)
+        histogram_layout.setContentsMargins(10, 10, 10, 10)
+        histogram_label = QtWidgets.QLabel("灰度直方图")
+        histogram_label.setStyleSheet("""
+            QLabel {
+                color: #37474f; 
+                font-size: 12pt; 
+                font-weight: bold;
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        histogram_label.setAlignment(QtCore.Qt.AlignCenter)
+        histogram_layout.addWidget(histogram_label)
+        histogram_layout.addStretch()
+        
+        # 将两个面板添加到右侧布局（上下排列，各占50%）
+        right_panel_layout.addWidget(heatmap_panel, 1)
+        right_panel_layout.addWidget(histogram_panel, 1)
+        
+        # 将右侧面板添加到主分割器
+        main_splitter.addWidget(self.right_panel)
+        
+        # 设置分割器的初始尺寸比例（左侧固定，中间自适应，右侧固定）
+        main_splitter.setStretchFactor(0, 0)  # 左侧工具栏
+        main_splitter.setStretchFactor(1, 1)  # 中间视图区域
+        main_splitter.setStretchFactor(2, 0)  # 右侧面板
+        
+        # 使用QMainWindow的setCentralWidget方法设置中心部件
+        self.setCentralWidget(main_splitter)
+        
+        # 初始时显示空白占位符
         self.axial_viewer = None
         self.sag_viewer = None
         self.cor_viewer = None
         self.volume_viewer = None
         
+        # 创建初始占位符
+        self.create_placeholder_views()
+        
         # 数据相关变量
         self.raw_array = None  # 原始数据（uint16）
         self.window_width = 65535
         self.window_level = 32767
+    
+    
+    def create_placeholder_views(self):
+        """创建占位符视图"""
+        placeholder_style = """
+            QLabel {
+                background-color: #f8f9fa;
+                border: 2px dashed #dee2e6;
+                border-radius: 8px;
+                color: #6c757d;
+                font-size: 14pt;
+                font-weight: 500;
+            }
+        """
+        
+        # 左上：Axial
+        axial_placeholder = QtWidgets.QLabel("Axial\n横断面")
+        axial_placeholder.setAlignment(QtCore.Qt.AlignCenter)
+        axial_placeholder.setStyleSheet(placeholder_style)
+        self.grid_layout.addWidget(axial_placeholder, 0, 0)
+        
+        # 右上：Sagittal
+        sagittal_placeholder = QtWidgets.QLabel("Sagittal\n矢状面")
+        sagittal_placeholder.setAlignment(QtCore.Qt.AlignCenter)
+        sagittal_placeholder.setStyleSheet(placeholder_style)
+        self.grid_layout.addWidget(sagittal_placeholder, 0, 1)
+        
+        # 左下：Coronal
+        coronal_placeholder = QtWidgets.QLabel("Coronal\n冠状面")
+        coronal_placeholder.setAlignment(QtCore.Qt.AlignCenter)
+        coronal_placeholder.setStyleSheet(placeholder_style)
+        self.grid_layout.addWidget(coronal_placeholder, 1, 0)
+        
+        # 右下：3D View
+        view3d_placeholder = QtWidgets.QLabel("3D View\n三维视图")
+        view3d_placeholder.setAlignment(QtCore.Qt.AlignCenter)
+        view3d_placeholder.setStyleSheet(placeholder_style)
+        self.grid_layout.addWidget(view3d_placeholder, 1, 1)
     
     def on_window_level_changed(self):
         """窗宽窗位改变时的处理"""
@@ -1326,23 +1594,17 @@ class CTViewer4(QtWidgets.QWidget):
     
     def clear_viewers(self):
         """清除现有的视图组件"""
-        # 删除现有的视图组件
-        if self.axial_viewer:
-            self.grid_layout.removeWidget(self.axial_viewer)
-            self.axial_viewer.deleteLater()
-            self.axial_viewer = None
-        if self.sag_viewer:
-            self.grid_layout.removeWidget(self.sag_viewer)
-            self.sag_viewer.deleteLater()
-            self.sag_viewer = None
-        if self.cor_viewer:
-            self.grid_layout.removeWidget(self.cor_viewer)
-            self.cor_viewer.deleteLater()
-            self.cor_viewer = None
-        if self.volume_viewer:
-            self.grid_layout.removeWidget(self.volume_viewer)
-            self.volume_viewer.deleteLater()
-            self.volume_viewer = None
+        # 清除grid_layout中的所有widget
+        while self.grid_layout.count():
+            item = self.grid_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # 重置视图引用
+        self.axial_viewer = None
+        self.sag_viewer = None
+        self.cor_viewer = None
+        self.volume_viewer = None
     
     def apply_anisotropic_filter(self):
         """应用各向异性平滑滤波"""
@@ -1820,8 +2082,18 @@ class CTViewer4(QtWidgets.QWidget):
     def run_unet_segmentation(self):
         """运行UNet分割程序"""
         try:
-            # 创建UNet分割对话框
-            dialog = UnetSegmentationDialog(self)
+            # 准备当前数据
+            current_data = None
+            if hasattr(self, 'image') and self.image is not None and hasattr(self, 'array') and self.array is not None:
+                # 包含图像和数组数据
+                current_data = {
+                    'image': self.image,
+                    'array': self.array,
+                    'spacing': self.spacing if hasattr(self, 'spacing') else (1.0, 1.0, 1.0)
+                }
+            
+            # 创建UNet分割对话框，传递当前数据
+            dialog = UnetSegmentationDialog(self, current_data=current_data)
             
             # 如果用户点击了确定
             if dialog.exec_() == QtWidgets.QDialog.Accepted:
@@ -1851,9 +2123,41 @@ class CTViewer4(QtWidgets.QWidget):
                         sw_batch_size=params['sw_batch_size']
                     )
                     
-                    # 执行分割
-                    output_filename = os.path.basename(params['input_file']).replace('.nii', '_segmented.nii')
-                    result_path = inferencer.run(params['input_file'], output_filename)
+                    # 执行分割 - 根据是否使用当前数据选择不同的方法
+                    if params['use_current_data']:
+                        # 使用当前数据进行分割
+                        data = params['current_data']
+                        output_filename = "current_data_segmented.nii.gz"
+                        
+                        # 获取affine矩阵
+                        import SimpleITK as sitk
+                        affine_matrix = None
+                        if data['image'] is not None:
+                            # 从SimpleITK图像获取affine
+                            # SimpleITK使用方向矩阵和原点，需要转换为affine
+                            direction = data['image'].GetDirection()
+                            spacing = data['image'].GetSpacing()
+                            origin = data['image'].GetOrigin()
+                            
+                            # 构建affine矩阵
+                            import numpy as np
+                            affine_matrix = np.eye(4)
+                            # 设置旋转和缩放部分
+                            for i in range(3):
+                                for j in range(3):
+                                    affine_matrix[i, j] = direction[i*3 + j] * spacing[j]
+                            # 设置平移部分
+                            affine_matrix[:3, 3] = origin
+                        
+                        result_path = inferencer.run_from_array(
+                            data['array'], 
+                            affine=affine_matrix,
+                            output_filename=output_filename
+                        )
+                    else:
+                        # 从文件加载进行分割
+                        output_filename = os.path.basename(params['input_file']).replace('.nii', '_segmented.nii')
+                        result_path = inferencer.run(params['input_file'], output_filename)
                     
                     progress.close()
                     
@@ -1861,7 +2165,10 @@ class CTViewer4(QtWidgets.QWidget):
                     if params['overlay_with_original']:
                         try:
                             # 创建融合图像
-                            overlay_filename = os.path.basename(params['input_file']).replace('.nii', '_overlay.nii')
+                            if params['use_current_data']:
+                                overlay_filename = "current_data_overlay.nii.gz"
+                            else:
+                                overlay_filename = os.path.basename(params['input_file']).replace('.nii', '_overlay.nii')
                             overlay_path = os.path.join(params['output_dir'], overlay_filename)
                             
                             # 显示融合进度
@@ -1877,13 +2184,39 @@ class CTViewer4(QtWidgets.QWidget):
                             overlay_progress.show()
                             QtWidgets.QApplication.processEvents()
                             
-                            create_overlay_from_files(
-                                params['input_file'],
-                                result_path,
-                                overlay_path,
-                                color=params['overlay_color'],
-                                alpha=params['overlay_alpha']
-                            )
+                            # 根据是否使用当前数据选择不同的方法
+                            if params['use_current_data']:
+                                # 使用当前数据创建融合图像
+                                # 先将当前数据保存为临时文件，然后调用融合函数
+                                import tempfile
+                                import SimpleITK as sitk
+                                
+                                temp_input = tempfile.NamedTemporaryFile(suffix='.nii.gz', delete=False)
+                                temp_input.close()
+                                
+                                # 保存当前数据为NIfTI文件
+                                sitk.WriteImage(params['current_data']['image'], temp_input.name)
+                                
+                                # 创建融合图像
+                                create_overlay_from_files(
+                                    temp_input.name,
+                                    result_path,
+                                    overlay_path,
+                                    color=params['overlay_color'],
+                                    alpha=params['overlay_alpha']
+                                )
+                                
+                                # 删除临时文件
+                                os.unlink(temp_input.name)
+                            else:
+                                # 从文件创建融合图像
+                                create_overlay_from_files(
+                                    params['input_file'],
+                                    result_path,
+                                    overlay_path,
+                                    color=params['overlay_color'],
+                                    alpha=params['overlay_alpha']
+                                )
                             
                             overlay_progress.close()
                             

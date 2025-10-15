@@ -35,13 +35,15 @@ def loadDICOMImages(url):
     dcm_files.sort()  # 按文件名排序
     file_count = len(dcm_files)
     g = None
+    first_info = None
     for i, file in enumerate(dcm_files):
         filename=os.path.join(url, file)
         tempdata , info =loadDICOMImage(filename)
         if g is None:
             g = np.zeros((file_count,info['Rows'],info['Columns']))
+            first_info = info  # 保存第一个文件的header信息
         g[i] = tempdata.copy()
-    return g
+    return g, first_info
 
 def makeDICOMFromExample(in_url, out_url, g):
     dcm_files = [f for f in os.listdir(in_url) if f.endswith('.dcm')]
