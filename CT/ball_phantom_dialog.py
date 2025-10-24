@@ -134,6 +134,21 @@ class BallPhantomCalibrationDialog(QtWidgets.QDialog):
         max_size_note.setStyleSheet("color: gray; font-size: 9pt;")
         data_layout.addWidget(max_size_note, 3, 2)
         
+        # 添加数据旋转选项
+        data_layout.addWidget(QtWidgets.QLabel("数据旋转:"), 4, 0)
+        self.rotation_combo = QtWidgets.QComboBox()
+        self.rotation_combo.addItems(["不旋转", "顺时针90度", "逆时针90度"])
+        data_layout.addWidget(self.rotation_combo, 4, 1)
+        
+        rotation_note = QtWidgets.QLabel("(投影数据旋转)")
+        rotation_note.setStyleSheet("color: gray; font-size: 9pt;")
+        data_layout.addWidget(rotation_note, 4, 2)
+        
+        # 添加归一化处理选项
+        self.apply_preprocessing = QtWidgets.QCheckBox("应用数据归一化")
+        self.apply_preprocessing.setChecked(True)  # 默认启用
+        data_layout.addWidget(self.apply_preprocessing, 5, 0, 1, 3)
+        
         # 禁用实际数据输入区域（默认使用模拟数据）
         data_group.setEnabled(False)
         
@@ -194,6 +209,8 @@ class BallPhantomCalibrationDialog(QtWidgets.QDialog):
                 segmentation_threshold = self.segmentation_threshold_input.value()
                 min_size = self.min_size_input.value()
                 max_size = self.max_size_input.value()
+                rotation_option = self.rotation_combo.currentIndex()  # 0: 不旋转, 1: 顺时针90度, 2: 逆时针90度
+                apply_preprocessing = self.apply_preprocessing.isChecked()
                 
                 # 写入标定脚本
                 f.write('# -*- coding: utf-8 -*-\n')  # 添加编码声明
@@ -262,6 +279,10 @@ class BallPhantomCalibrationDialog(QtWidgets.QDialog):
                     # 将路径转换为Windows格式的字符串，避免转义问题
                     projection_folder_escaped = projection_folder.replace('\\', '/')
                     
+                    # 先创建leapct对象用于后续的negLog操作
+                    f.write(f'# Initialize leapct object for preprocessing\n')
+                    f.write(f'leapct = tomographicModels()\n\n')
+                    
                     # 先加载实际数据
                     f.write(f'# Load actual projection data from DICOM folder\n')
                     f.write(f'import sys\n')
@@ -271,10 +292,41 @@ class BallPhantomCalibrationDialog(QtWidgets.QDialog):
                     f.write(f'print("DICOM files loaded from folder, shape: ", g.shape)\n')
                     f.write(f'print("DICOM Header Info: ", dicom_info)\n\n')
                     
+                    # 添加数据旋转代码
+                    if rotation_option == 1:  # 顺时针90度
+                        f.write(f'# Apply clockwise 90 degree rotation\n')
+                        f.write(f'print("Applying clockwise 90 degree rotation...")\n')
+                        f.write(f'g = np.rot90(g, k=-1, axes=(1, 2))  # k=-1 for clockwise rotation\n')
+                        f.write(f'print("After rotation, shape: ", g.shape)\n\n')
+                    elif rotation_option == 2:  # 逆时针90度
+                        f.write(f'# Apply counter-clockwise 90 degree rotation\n')
+                        f.write(f'print("Applying counter-clockwise 90 degree rotation...")\n')
+                        f.write(f'g = np.rot90(g, k=1, axes=(1, 2))  # k=1 for counter-clockwise rotation\n')
+                        f.write(f'print("After rotation, shape: ", g.shape)\n\n')
+                    
+                    # 添加数据预处理代码
+                    if apply_preprocessing:
+                        f.write(f'# Apply data preprocessing: normalization\n')
+                        f.write(f'print("Applying data normalization...")\n')
+                        f.write(f'print(f"Before normalization - dtype: {{g.dtype}}, min: {{np.min(g):.4f}}, max: {{np.max(g):.4f}}, mean: {{np.mean(g):.4f}}")\n')
+                        f.write(f'g = g / np.max(g)  # Normalize by maximum value\n')
+                        f.write(f'print(f"After normalization - min: {{np.min(g):.4f}}, max: {{np.max(g):.4f}}, mean: {{np.mean(g):.4f}}")\n')
+                        f.write(f'g = np.ascontiguousarray(g, dtype=np.float32)  # Convert to C-contiguous float32 array\n')
+                        f.write('print(f"After dtype conversion - dtype: {g.dtype}, C_CONTIGUOUS: {g.flags[\'C_CONTIGUOUS\']}")\n\n')
+                    
                     # 从DICOM header中读取参数
                     f.write(f'# Extract CT geometry parameters from DICOM header\n')
-                    f.write(f'numRows = dicom_info["Rows"]\n')
-                    f.write(f'numCols = dicom_info["Columns"]\n')
+                    
+                    # 如果旋转了90度，需要交换行列数
+                    if rotation_option in [1, 2]:  # 如果进行了90度旋转
+                        f.write(f'# After 90 degree rotation, rows and columns are swapped\n')
+                        f.write(f'numRows = g.shape[2]  # Use actual shape after rotation\n')
+                        f.write(f'numCols = g.shape[1]  # Use actual shape after rotation\n')
+                        f.write(f'# Note: Original DICOM had Rows={{dicom_info["Rows"]}}, Columns={{dicom_info["Columns"]}}\n')
+                    else:
+                        f.write(f'numRows = dicom_info["Rows"]\n')
+                        f.write(f'numCols = dicom_info["Columns"]\n')
+                    
                     f.write(f'pixelSize = dicom_info["HorizontalPixelSize"]  # 使用水平像素大小\n')
                     f.write(f'sdd = dicom_info["DistanceSourceToDetector"]\n')
                     f.write(f'sod = dicom_info["DistanceSourceToPatient"]\n')
@@ -285,7 +337,6 @@ class BallPhantomCalibrationDialog(QtWidgets.QDialog):
                     
                     # 用DICOM参数设置CT几何
                     f.write(f'# Set CT geometry with DICOM parameters\n')
-                    f.write(f'leapct = tomographicModels()\n')
                     f.write(f'leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, 360.0), sod, sdd)\n')
                     f.write(f'leapct.set_default_volume()\n\n')
                 
@@ -321,8 +372,8 @@ class BallPhantomCalibrationDialog(QtWidgets.QDialog):
                 f.write('print("[centerRow, centerCol, sod, odd, psi, theta, phi, r, z_0, phase]")\n')
                 f.write('print("Guess of CT geometry parameters: ", optimized_params)\n')
                 f.write('print(f"优化后的损失: {cal.cost(optimized_params):.6f}")\n')
-                f.write('print(f"探测器水平中心: {(optimized_params[2] + optimized_params[3]):.6f}")\n')
-                f.write('print(f"探测器垂直中心: {optimized_params[2]:.6f}")\n')
+                f.write('print(f"探测器sdd: {(optimized_params[2] + optimized_params[3]):.6f}")\n')
+                f.write('print(f"探测器sod: {optimized_params[2]:.6f}")\n')
                 f.write('print(f"探测器水平方向偏移量: {(optimized_params[1] - (numRows - 1) / 2.0):.6f}")\n')
                 f.write('print(f"探测器垂直方向偏移量: {(optimized_params[0] - (numCols - 1) / 2.0):.6f}")\n')
                 f.write('print(f"探测器面内旋转角: {optimized_params[5]:.6f}")\n')
