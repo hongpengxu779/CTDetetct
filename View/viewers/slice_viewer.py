@@ -46,6 +46,14 @@ class SliceViewer(QtWidgets.QWidget):
         self.active_line_index = -1  # 当前活动的线段索引
         self.dragging_point = None  # 正在拖动的点 ('start' 或 'end')
         
+        # 角度测量相关变量
+        self.angle_points = []  # 角度测量的三个点 [p1, p2, p3]
+        self.angle_measuring = False  # 是否正在测量角度
+        self.angle_measurements = []  # 已完成的角度测量
+        self.corresponding_angles = []  # 对应的角度（其他视图中的角度）
+        self.active_angle_index = -1  # 当前活动的角度索引
+        self.dragging_angle_point = None  # 正在拖动的角度点索引 (0, 1, 2)
+        
         # 确定视图类型
         if "Axial" in title:
             self.view_type = "axial"
@@ -191,7 +199,7 @@ class SliceViewer(QtWidgets.QWidget):
         参数
         ----
         mode : str
-            测量模式，例如 'distance'
+            测量模式，例如 'distance' 或 'angle'
         parent_controller : object
             父控制器对象，用于回调
         """
@@ -211,8 +219,15 @@ class SliceViewer(QtWidgets.QWidget):
         self.active_line_index = -1
         self.dragging_point = None
         
-        # 确保对应线段列表是空的
+        # 清除角度测量状态
+        self.angle_measuring = False
+        self.angle_points = []
+        self.active_angle_index = -1
+        self.dragging_angle_point = None
+        
+        # 确保对应线段和角度列表是空的
         self.corresponding_lines = []
+        self.corresponding_angles = []
     
     def disable_measurement_mode(self):
         """禁用测量模式"""
@@ -225,6 +240,12 @@ class SliceViewer(QtWidgets.QWidget):
         self.is_measuring = False
         self.start_point = None
         self.end_point = None
+        
+        # 清除角度测量状态
+        self.angle_measuring = False
+        self.angle_points = []
+        self.active_angle_index = -1
+        self.dragging_angle_point = None
     
     def eventFilter(self, obj, event):
         """事件过滤器，处理鼠标事件"""
@@ -237,11 +258,55 @@ class SliceViewer(QtWidgets.QWidget):
                         return self.handle_right_click(event)
                         
                 elif event.type() == QtCore.QEvent.MouseMove:
-                    return self.handle_mouse_move(event)
+                    # 只有在左键按下时才处理移动事件，避免鼠标没有按下时也跟随移动
+                    buttons = event.buttons()
+                    if buttons & QtCore.Qt.LeftButton:
+                        return self.handle_mouse_move(event)
+                    else:
+                        # 当鼠标没有按下时，只改变光标形状
+                        scene_pos = self.view.mapToScene(event.pos())
+                        # 检查鼠标是否靠近任何线段的端点
+                        line_index, point_type = self.check_line_endpoints(scene_pos)
+                        if line_index >= 0:
+                            self.view.viewport().setCursor(QtCore.Qt.SizeAllCursor)
+                        else:
+                            self.view.viewport().setCursor(QtCore.Qt.CrossCursor)
+                        return True
                     
                 elif event.type() == QtCore.QEvent.MouseButtonRelease:
                     if event.button() == QtCore.Qt.LeftButton:
                         return self.handle_mouse_release(event)
+            elif self.measurement_mode == 'angle':
+                if event.type() == QtCore.QEvent.MouseButtonPress:
+                    if event.button() == QtCore.Qt.LeftButton:
+                        return self.handle_angle_mouse_press(event)
+                    elif event.button() == QtCore.Qt.RightButton:
+                        return self.handle_right_click(event)
+                        
+                elif event.type() == QtCore.QEvent.MouseMove:
+                    # 只有在左键按下时才处理移动事件，避免鼠标没有按下时也跟随移动
+                    buttons = event.buttons()
+                    if buttons & QtCore.Qt.LeftButton:
+                        return self.handle_angle_mouse_move(event)
+                    else:
+                        # 当鼠标没有按下时，只改变光标形状
+                        scene_pos = self.view.mapToScene(event.pos())
+                        # 检查鼠标是否靠近任何角度测量的点
+                        angle_index, point_idx = self.check_angle_points(scene_pos)
+                        if angle_index >= 0 and point_idx is not None:
+                            self.view.viewport().setCursor(QtCore.Qt.SizeAllCursor)
+                        else:
+                            # 检查鼠标是否靠近任何角度测量的线段
+                            angle_index = self.find_angle_near_point(scene_pos)
+                            if angle_index >= 0:
+                                self.view.viewport().setCursor(QtCore.Qt.PointingHandCursor)
+                            else:
+                                self.view.viewport().setCursor(QtCore.Qt.CrossCursor)
+                        return True
+                    
+                elif event.type() == QtCore.QEvent.MouseButtonRelease:
+                    if event.button() == QtCore.Qt.LeftButton:
+                        return self.handle_angle_mouse_release(event)
             else:
                 # 即使不在测量模式，也处理右键点击
                 if event.type() == QtCore.QEvent.MouseButtonPress:
@@ -264,6 +329,21 @@ class SliceViewer(QtWidgets.QWidget):
             # 添加删除线段的动作
             delete_action = context_menu.addAction("删除测量线")
             delete_action.triggered.connect(lambda: self.delete_measurement_line(line_index))
+            
+            # 在鼠标位置显示菜单
+            context_menu.exec_(event.globalPos())
+            return True
+        
+        # 检查是否点击了角度测量
+        angle_index = self.find_angle_near_point(scene_pos)
+        
+        if angle_index >= 0:
+            # 创建上下文菜单
+            context_menu = QtWidgets.QMenu(self)
+            
+            # 添加删除角度测量的动作
+            delete_action = context_menu.addAction("删除角度测量")
+            delete_action.triggered.connect(lambda: self.delete_angle_measurement(angle_index))
             
             # 在鼠标位置显示菜单
             context_menu.exec_(event.globalPos())
@@ -291,6 +371,36 @@ class SliceViewer(QtWidgets.QWidget):
             # 计算点到线段的距离
             dist = self.point_to_line_distance(pos, line['start'], line['end'])
             if dist < threshold:
+                return i
+        
+        return -1
+        
+    def find_angle_near_point(self, pos, threshold=10):
+        """
+        查找靠近指定点的角度测量
+        
+        参数
+        ----
+        pos : QPointF
+            要检查的位置
+        threshold : float
+            距离阈值
+            
+        返回
+        ----
+        angle_index : int
+            如果找到角度，返回角度索引；否则返回-1
+        """
+        for i, angle in enumerate(self.angle_measurements):
+            # 检查是否靠近任何一个点
+            if (self.calculate_distance(pos, angle['p1']) < threshold or
+                self.calculate_distance(pos, angle['p2']) < threshold or
+                self.calculate_distance(pos, angle['p3']) < threshold):
+                return i
+                
+            # 检查是否靠近任何一条线段
+            if (self.point_to_line_distance(pos, angle['p1'], angle['p2']) < threshold or
+                self.point_to_line_distance(pos, angle['p2'], angle['p3']) < threshold):
                 return i
         
         return -1
@@ -357,9 +467,35 @@ class SliceViewer(QtWidgets.QWidget):
                 
                 # 调用父控制器的同步方法，确保所有视图的线段同步
                 self.parent_controller.sync_measurement_lines(self.view_type)
+                
+    def delete_angle_measurement(self, angle_index):
+        """
+        删除指定的角度测量
+        
+        参数
+        ----
+        angle_index : int
+            要删除的角度索引
+        """
+        if 0 <= angle_index < len(self.angle_measurements):
+            # 删除角度测量
+            del self.angle_measurements[angle_index]
+            
+            # 重绘测量线和角度
+            self.redraw_measurement_lines()
+            
+            # 通知父控制器角度已删除，并同步删除其他视图中的对应角度
+            if hasattr(self, 'parent_controller') and self.parent_controller:
+                # 更新当前视图的角度列表
+                if hasattr(self.parent_controller, 'angle_measurements'):
+                    self.parent_controller.angle_measurements[self.view_type] = self.angle_measurements.copy()
+                
+                # 调用父控制器的同步方法，确保所有视图的角度同步
+                if hasattr(self.parent_controller, 'sync_angle_measurements'):
+                    self.parent_controller.sync_angle_measurements(self.view_type)
     
     def handle_mouse_press(self, event):
-        """处理鼠标按下事件"""
+        """处理鼠标按下事件（距离测量模式）"""
         # 获取场景坐标
         scene_pos = self.view.mapToScene(event.pos())
         
@@ -394,9 +530,98 @@ class SliceViewer(QtWidgets.QWidget):
         # 重绘测量线
         self.redraw_measurement_lines()
         return True
+        
+    def handle_angle_mouse_press(self, event):
+        """处理鼠标按下事件（角度测量模式）"""
+        # 获取场景坐标
+        scene_pos = self.view.mapToScene(event.pos())
+        
+        # 检查是否点击了已有角度测量的点
+        angle_index, point_idx = self.check_angle_points(scene_pos)
+        
+        if angle_index >= 0 and point_idx is not None:
+            # 点击了已有角度测量的点，开始拖动
+            self.active_angle_index = angle_index
+            self.dragging_angle_point = point_idx
+            self.angle_measuring = False
+            self.end_point = None  # 清除临时点
+            return True
+            
+        # 如果没有正在进行的测量，则开始新的测量
+        if not self.angle_measuring:
+            # 清除已有的角度测量
+            self.angle_measurements = []
+            
+            # 开始新的测量
+            self.angle_measuring = True
+            self.angle_points = [scene_pos]
+            self.end_point = None  # 确保清除之前的临时点
+            self.redraw_measurement_lines()
+            return True
+        
+        # 如果正在测量角度，添加新的点
+        if self.angle_measuring:
+            # 添加点到列表
+            if len(self.angle_points) < 3:
+                # 如果是第二个点，则设置为顶点
+                if len(self.angle_points) == 1:
+                    self.angle_points.append(scene_pos)  # 添加顶点
+                    self.end_point = None  # 清除临时的第二个点
+                # 如果是第三个点，则添加并完成测量
+                elif len(self.angle_points) == 2:
+                    self.angle_points.append(scene_pos)  # 添加第三个点
+                    # 完成当前测量并添加到列表
+                    self.complete_angle_measurement()
+                    
+                    # 重置测量状态，不立即开始新测量
+                    self.angle_measuring = False
+                    self.angle_points = []
+                    self.end_point = None
+            
+            # 重绘测量线和角度
+            self.redraw_measurement_lines()
+            return True
+        
+        # 如果没有正在进行的测量，则开始新的测量
+        if not self.angle_measuring:
+            # 清除已有的角度测量
+            if hasattr(self, 'parent_controller') and self.parent_controller and hasattr(self.parent_controller, 'clear_all_angle_measurements'):
+                self.parent_controller.clear_all_angle_measurements()
+            else:
+                self.angle_measurements = []
+                self.corresponding_angles = []
+            
+            # 开始新的测量
+            self.angle_measuring = True
+            self.angle_points = [scene_pos]
+            
+            # 重置活动角度索引
+            self.active_angle_index = -1
+            self.dragging_angle_point = None
+            
+            # 重绘测量线和角度
+            self.redraw_measurement_lines()
+            return True
+        
+        # 如果正在测量角度，添加新的点
+        if self.angle_measuring:
+            # 添加点到列表
+            self.angle_points.append(scene_pos)
+            
+            # 如果已有三个点，则完成测量
+            if len(self.angle_points) == 3:
+                # 重绘测量线和角度，显示角度值
+                self.redraw_measurement_lines()
+            else:
+                # 重绘测量线和角度
+                self.redraw_measurement_lines()
+                
+            return True
+        
+        return False
     
     def handle_mouse_move(self, event):
-        """处理鼠标移动事件"""
+        """处理鼠标移动事件（距离测量模式）"""
         scene_pos = self.view.mapToScene(event.pos())
         
         if self.is_measuring:
@@ -460,9 +685,96 @@ class SliceViewer(QtWidgets.QWidget):
                 self.view.viewport().setCursor(QtCore.Qt.CrossCursor)
             
         return False
+        
+    def handle_angle_mouse_move(self, event):
+        """处理鼠标移动事件（角度测量模式）"""
+        scene_pos = self.view.mapToScene(event.pos())
+        
+        if self.angle_measuring and len(self.angle_points) > 0:
+            # 如果正在测量第二个点，更新它
+            if len(self.angle_points) == 1:
+                # 显示临时的第二个点
+                self.end_point = scene_pos  # 使用end_point来显示临时的第二个点
+                # 重绘测量线和角度
+                self.redraw_measurement_lines()
+            # 如果正在测量第三个点，更新它
+            elif len(self.angle_points) == 2:
+                # 显示临时的第三个点
+                self.end_point = scene_pos  # 使用end_point来显示临时的第三个点
+                # 重绘测量线和角度
+                self.redraw_measurement_lines()
+                
+                # 计算并显示角度
+                if len(self.angle_points) == 3:
+                    angle_value = self.calculate_angle(
+                        self.angle_points[0], 
+                        self.angle_points[1], 
+                        self.angle_points[2]
+                    )
+                    
+                    # 更新状态栏显示当前角度
+                    if hasattr(self, 'parent_controller') and self.parent_controller and hasattr(self.parent_controller, 'statusBar'):
+                        self.parent_controller.statusBar().showMessage(f"角度测量: {angle_value:.1f}°")
+                    
+                    # 实时更新其他视图中的临时角度
+                    if hasattr(self, 'parent_controller') and self.parent_controller and hasattr(self.parent_controller, 'update_temp_angle'):
+                        self.parent_controller.update_temp_angle(
+                            self.view_type, 
+                            self.angle_points[0], 
+                            self.angle_points[1], 
+                            self.angle_points[2]
+                        )
+            
+            return True
+        
+        elif self.active_angle_index >= 0 and self.dragging_angle_point is not None:
+            # 更新正在拖动的点
+            point_keys = ['p1', 'p2', 'p3']
+            self.angle_measurements[self.active_angle_index][point_keys[self.dragging_angle_point]] = scene_pos
+            
+            # 重新计算角度
+            p1 = self.angle_measurements[self.active_angle_index]['p1']
+            p2 = self.angle_measurements[self.active_angle_index]['p2']
+            p3 = self.angle_measurements[self.active_angle_index]['p3']
+            angle_value = self.calculate_angle(p1, p2, p3)
+            self.angle_measurements[self.active_angle_index]['angle'] = angle_value
+            
+            # 重绘测量线和角度
+            self.redraw_measurement_lines()
+            
+            # 更新状态栏显示当前角度
+            if hasattr(self, 'parent_controller') and self.parent_controller and hasattr(self.parent_controller, 'statusBar'):
+                self.parent_controller.statusBar().showMessage(f"角度测量: {angle_value:.1f}°")
+            
+            # 实时更新其他视图中的对应角度
+            if hasattr(self, 'parent_controller') and self.parent_controller and hasattr(self.parent_controller, 'angle_measurements') and hasattr(self.parent_controller, 'sync_angle_measurements'):
+                # 更新当前视图的角度列表
+                self.parent_controller.angle_measurements[self.view_type] = self.angle_measurements.copy()
+                
+                # 调用父控制器的同步方法，确保所有视图的角度同步
+                self.parent_controller.sync_angle_measurements(self.view_type)
+                
+            # 清除临时点，避免拖动完成后仍然显示临时线段
+            self.end_point = None
+                
+            return True
+        
+        # 检查鼠标是否靠近任何角度测量的点，如果是则改变鼠标形状
+        angle_index, point_idx = self.check_angle_points(scene_pos)
+        if angle_index >= 0 and point_idx is not None:
+            self.view.viewport().setCursor(QtCore.Qt.SizeAllCursor)
+        else:
+            # 检查鼠标是否靠近任何角度测量的线段，如果是则改变鼠标形状
+            angle_index = self.find_angle_near_point(scene_pos)
+            if angle_index >= 0:
+                self.view.viewport().setCursor(QtCore.Qt.PointingHandCursor)
+            else:
+                self.view.viewport().setCursor(QtCore.Qt.CrossCursor)
+            
+        return False
     
     def handle_mouse_release(self, event):
-        """处理鼠标释放事件"""
+        """处理鼠标释放事件（距离测量模式）"""
         if self.is_measuring and self.start_point and self.end_point:
             # 计算距离
             distance = self.calculate_distance(self.start_point, self.end_point)
@@ -544,10 +856,148 @@ class SliceViewer(QtWidgets.QWidget):
             return True
         
         return False
+        
+    def handle_angle_mouse_release(self, event):
+        """处理鼠标释放事件（角度测量模式）"""
+        if self.angle_measuring and len(self.angle_points) == 3:
+            # 计算角度
+            angle_value = self.calculate_angle(
+                self.angle_points[0], 
+                self.angle_points[1], 
+                self.angle_points[2]
+            )
+            
+            # 完成测量，添加到列表
+            self.complete_angle_measurement()
+            
+            # 重置测量状态，完全退出测量模式
+            self.angle_measuring = False
+            self.angle_points = []
+            self.end_point = None
+            
+            # 重绘测量线和角度
+            self.redraw_measurement_lines()
+            return True
+            
+        elif self.active_angle_index >= 0 and self.dragging_angle_point is not None:
+            # 通知父控制器角度已更新
+            if hasattr(self, 'parent_controller') and self.parent_controller and hasattr(self.parent_controller, 'on_angle_measurement_completed'):
+                p1 = self.angle_measurements[self.active_angle_index]['p1']
+                p2 = self.angle_measurements[self.active_angle_index]['p2']
+                p3 = self.angle_measurements[self.active_angle_index]['p3']
+                angle = self.angle_measurements[self.active_angle_index]['angle']
+                
+                self.parent_controller.on_angle_measurement_completed(
+                    self.view_type,
+                    p1,
+                    p2,
+                    p3,
+                    angle
+                )
+                
+                # 更新状态栏显示测量更新
+                if hasattr(self.parent_controller, 'statusBar'):
+                    self.parent_controller.statusBar().showMessage(f"角度测量更新: {angle:.1f}°", 3000)
+            
+            # 重置拖动状态
+            self.active_angle_index = -1
+            self.dragging_angle_point = None
+            self.end_point = None  # 确保清除临时点
+            return True
+        
+        # 在所有情况下都清除临时点
+        self.end_point = None
+        
+        return False
+        
+    def complete_angle_measurement(self):
+        """完成角度测量并添加到列表"""
+        if len(self.angle_points) == 3:
+            # 计算角度
+            angle_value = self.calculate_angle(
+                self.angle_points[0], 
+                self.angle_points[1], 
+                self.angle_points[2]
+            )
+            
+            # 清除已有的角度测量，只保留一个角度测量
+            self.angle_measurements = []
+            
+            # 添加新的角度测量
+            self.angle_measurements.append({
+                'p1': self.angle_points[0],
+                'p2': self.angle_points[1],  # 顶点
+                'p3': self.angle_points[2],
+                'angle': angle_value
+            })
+            
+            # 通知父控制器测量完成
+            if hasattr(self, 'parent_controller') and self.parent_controller and hasattr(self.parent_controller, 'on_angle_measurement_completed'):
+                # 调整其他视图的切片位置
+                if hasattr(self.parent_controller, 'adjust_slices_for_angle_measurement'):
+                    self.parent_controller.adjust_slices_for_angle_measurement(
+                        self.view_type,
+                        self.angle_points[0],
+                        self.angle_points[1],
+                        self.angle_points[2]
+                    )
+                
+                self.parent_controller.on_angle_measurement_completed(
+                    self.view_type,
+                    self.angle_points[0],
+                    self.angle_points[1],
+                    self.angle_points[2],
+                    angle_value
+                )
+                
+                # 更新状态栏显示测量完成
+                if hasattr(self.parent_controller, 'statusBar'):
+                    self.parent_controller.statusBar().showMessage(f"角度测量完成: {angle_value:.1f}°", 3000)
     
     def calculate_distance(self, p1, p2):
         """计算两点之间的欧几里得距离"""
         return math.sqrt((p2.x() - p1.x())**2 + (p2.y() - p1.y())**2)
+        
+    def calculate_angle(self, p1, p2, p3):
+        """
+        计算由三个点形成的角度，p2是角的顶点
+        
+        参数
+        ----
+        p1, p2, p3 : QPointF
+            构成角度的三个点，p2是角的顶点
+            
+        返回
+        ----
+        angle : float
+            角度值，以度为单位 (0-180)
+        """
+        # 计算向量
+        v1 = QtCore.QPointF(p1.x() - p2.x(), p1.y() - p2.y())
+        v2 = QtCore.QPointF(p3.x() - p2.x(), p3.y() - p2.y())
+        
+        # 计算向量长度
+        len_v1 = math.sqrt(v1.x() ** 2 + v1.y() ** 2)
+        len_v2 = math.sqrt(v2.x() ** 2 + v2.y() ** 2)
+        
+        # 防止除以0
+        if len_v1 < 0.0001 or len_v2 < 0.0001:
+            return 0
+        
+        # 计算点积
+        dot_product = v1.x() * v2.x() + v1.y() * v2.y()
+        
+        # 计算夹角的余弦值
+        cos_angle = dot_product / (len_v1 * len_v2)
+        
+        # 防止浮点误差导致的值超过范围
+        cos_angle = max(-1, min(1, cos_angle))
+        
+        # 计算角度并转换为度
+        angle_rad = math.acos(cos_angle)
+        angle_deg = math.degrees(angle_rad)
+        
+        return angle_deg
     
     def check_line_endpoints(self, pos, threshold=10):
         """
@@ -586,13 +1036,65 @@ class SliceViewer(QtWidgets.QWidget):
                 closest_point = 'end'
         
         return closest_line, closest_point
+        
+    def check_angle_points(self, pos, threshold=10):
+        """
+        检查位置是否靠近任何角度测量的点
+        
+        参数
+        ----
+        pos : QPointF
+            要检查的位置
+        threshold : float
+            距离阈值
+            
+        返回
+        ----
+        (angle_index, point_idx) : (int, int)
+            如果靠近点，返回角度索引和点索引（0, 1, 2）
+            如果不靠近任何点，返回 (-1, None)
+        """
+        closest_dist = float('inf')
+        closest_angle = -1
+        closest_point_idx = None
+        
+        for i, angle in enumerate(self.angle_measurements):
+            # 检查三个点
+            points = [angle['p1'], angle['p2'], angle['p3']]
+            for j, point in enumerate(points):
+                dist = self.calculate_distance(pos, point)
+                if dist < threshold and dist < closest_dist:
+                    closest_dist = dist
+                    closest_angle = i
+                    closest_point_idx = j
+        
+        return closest_angle, closest_point_idx
+    
+    def get_image_rect(self):
+        """获取当前图像的矩形边界"""
+        if self.pixmap_item and not self.pixmap_item.pixmap().isNull():
+            return self.pixmap_item.boundingRect()
+        return QtCore.QRectF()
+    
+    def constrain_point_to_image(self, point):
+        """将点限制在图像边界内"""
+        image_rect = self.get_image_rect()
+        if image_rect.isEmpty():
+            return point
+        
+        # 限制点在图像边界内
+        x = max(image_rect.left(), min(point.x(), image_rect.right()))
+        y = max(image_rect.top(), min(point.y(), image_rect.bottom()))
+        
+        return QtCore.QPointF(x, y)
     
     def redraw_measurement_lines(self):
-        """重绘所有测量线段"""
+        """重绘所有测量线段和角度"""
         # 清除所有已有的线段和文本
         for item in self.scene.items():
             if isinstance(item, (QtWidgets.QGraphicsLineItem, QtWidgets.QGraphicsTextItem, 
-                                QtWidgets.QGraphicsRectItem, QtWidgets.QGraphicsEllipseItem)):
+                                QtWidgets.QGraphicsRectItem, QtWidgets.QGraphicsEllipseItem,
+                                QtWidgets.QGraphicsPathItem)):
                 self.scene.removeItem(item)
         
         # 设置线段样式 - 使用亮红色，但线段更细
@@ -601,23 +1103,27 @@ class SliceViewer(QtWidgets.QWidget):
         
         # 绘制已完成的测量线段
         for i, line in enumerate(self.measurement_lines):
+            # 限制点在图像边界内
+            constrained_start = self.constrain_point_to_image(line['start'])
+            constrained_end = self.constrain_point_to_image(line['end'])
+            
             # 绘制线段
             line_item = self.scene.addLine(
-                line['start'].x(), line['start'].y(),
-                line['end'].x(), line['end'].y(),
+                constrained_start.x(), constrained_start.y(),
+                constrained_end.x(), constrained_end.y(),
                 pen
             )
             
             # 在线段起点和终点绘制更小的方块标记
             start_rect = QtWidgets.QGraphicsRectItem(
-                line['start'].x() - 2, line['start'].y() - 2, 4, 4
+                constrained_start.x() - 2, constrained_start.y() - 2, 4, 4
             )
             start_rect.setBrush(QtGui.QBrush(QtGui.QColor(255, 0, 0)))
             start_rect.setPen(pen)
             self.scene.addItem(start_rect)
             
             end_rect = QtWidgets.QGraphicsRectItem(
-                line['end'].x() - 2, line['end'].y() - 2, 4, 4
+                constrained_end.x() - 2, constrained_end.y() - 2, 4, 4
             )
             end_rect.setBrush(QtGui.QBrush(QtGui.QColor(255, 0, 0)))
             end_rect.setPen(pen)
@@ -625,12 +1131,12 @@ class SliceViewer(QtWidgets.QWidget):
             
             # 添加距离文本 - 直接显示在线段旁边
             # 计算线段中点
-            mid_x = (line['start'].x() + line['end'].x()) / 2
-            mid_y = (line['start'].y() + line['end'].y()) / 2
+            mid_x = (constrained_start.x() + constrained_end.x()) / 2
+            mid_y = (constrained_start.y() + constrained_end.y()) / 2
             
             # 计算文本位置 - 根据线段方向调整
-            dx = line['end'].x() - line['start'].x()
-            dy = line['end'].y() - line['start'].y()
+            dx = constrained_end.x() - constrained_start.x()
+            dy = constrained_end.y() - constrained_start.y()
             
             # 计算线段角度
             angle = math.atan2(dy, dx)
@@ -669,41 +1175,48 @@ class SliceViewer(QtWidgets.QWidget):
             # 先添加背景，再添加文本
             self.scene.addItem(text_bg)
             self.scene.addItem(text)
+            
+        # 绘制角度测量
+        self.draw_angle_measurements()
         
         # 绘制正在测量的线段
         if self.is_measuring and self.start_point and self.end_point:
+            # 限制点在图像边界内
+            constrained_start = self.constrain_point_to_image(self.start_point)
+            constrained_end = self.constrain_point_to_image(self.end_point)
+            
             # 绘制线段
             line_item = self.scene.addLine(
-                self.start_point.x(), self.start_point.y(),
-                self.end_point.x(), self.end_point.y(),
+                constrained_start.x(), constrained_start.y(),
+                constrained_end.x(), constrained_end.y(),
                 pen
             )
             
             # 在线段起点和终点绘制更小的方块标记
             start_rect = QtWidgets.QGraphicsRectItem(
-                self.start_point.x() - 2, self.start_point.y() - 2, 4, 4
+                constrained_start.x() - 2, constrained_start.y() - 2, 4, 4
             )
             start_rect.setBrush(QtGui.QBrush(QtGui.QColor(255, 0, 0)))
             start_rect.setPen(pen)
             self.scene.addItem(start_rect)
             
             end_rect = QtWidgets.QGraphicsRectItem(
-                self.end_point.x() - 2, self.end_point.y() - 2, 4, 4
+                constrained_end.x() - 2, constrained_end.y() - 2, 4, 4
             )
             end_rect.setBrush(QtGui.QBrush(QtGui.QColor(255, 0, 0)))
             end_rect.setPen(pen)
             self.scene.addItem(end_rect)
             
             # 计算并显示当前距离
-            distance = self.calculate_distance(self.start_point, self.end_point)
+            distance = self.calculate_distance(constrained_start, constrained_end)
             
             # 计算线段中点
-            mid_x = (self.start_point.x() + self.end_point.x()) / 2
-            mid_y = (self.start_point.y() + self.end_point.y()) / 2
+            mid_x = (constrained_start.x() + constrained_end.x()) / 2
+            mid_y = (constrained_start.y() + constrained_end.y()) / 2
             
             # 计算文本位置 - 根据线段方向调整
-            dx = self.end_point.x() - self.start_point.x()
-            dy = self.end_point.y() - self.start_point.y()
+            dx = constrained_end.x() - constrained_start.x()
+            dy = constrained_end.y() - constrained_start.y()
             
             # 计算线段角度
             angle = math.atan2(dy, dx)
@@ -746,6 +1259,393 @@ class SliceViewer(QtWidgets.QWidget):
         other_pen = QtGui.QPen(QtGui.QColor(0, 0, 255))  # 蓝色
         other_pen.setWidth(1)  # 更细的线段
         other_pen.setStyle(QtCore.Qt.SolidLine)  # 使用实线而不是虚线
+        
+    def draw_angle_measurements(self):
+        """绘制所有角度测量"""
+        # 设置线段样式 - 使用绿色
+        pen = QtGui.QPen(QtGui.QColor(0, 200, 0))
+        pen.setWidth(1)
+        
+        # 获取图像边界
+        image_rect = self.get_image_rect()
+        
+        # 绘制已完成的角度测量
+        for i, angle in enumerate(self.angle_measurements):
+            # 限制点在图像边界内
+            p1 = self.constrain_point_to_image(angle['p1'])
+            p2 = self.constrain_point_to_image(angle['p2'])  # 顶点
+            p3 = self.constrain_point_to_image(angle['p3'])
+            
+            # 绘制两条线段
+            line1 = self.scene.addLine(
+                p2.x(), p2.y(),
+                p1.x(), p1.y(),
+                pen
+            )
+            
+            line2 = self.scene.addLine(
+                p2.x(), p2.y(),
+                p3.x(), p3.y(),
+                pen
+            )
+            
+            # 在三个点上绘制小方块标记
+            points = [p1, p2, p3]
+            for j, point in enumerate(points):
+                rect = QtWidgets.QGraphicsRectItem(
+                    point.x() - 2, point.y() - 2, 4, 4
+                )
+                rect.setBrush(QtGui.QBrush(QtGui.QColor(0, 200, 0)))
+                rect.setPen(pen)
+                self.scene.addItem(rect)
+            
+            # 绘制角度弧
+            # 计算向量
+            v1 = QtCore.QPointF(p1.x() - p2.x(), p1.y() - p2.y())
+            v2 = QtCore.QPointF(p3.x() - p2.x(), p3.y() - p2.y())
+            
+            # 计算向量长度
+            len_v1 = math.sqrt(v1.x() ** 2 + v1.y() ** 2)
+            len_v2 = math.sqrt(v2.x() ** 2 + v2.y() ** 2)
+            
+            # 计算单位向量
+            if len_v1 > 0:
+                v1_unit = QtCore.QPointF(v1.x() / len_v1, v1.y() / len_v1)
+            else:
+                v1_unit = QtCore.QPointF(0, 0)
+                
+            if len_v2 > 0:
+                v2_unit = QtCore.QPointF(v2.x() / len_v2, v2.y() / len_v2)
+            else:
+                v2_unit = QtCore.QPointF(0, 0)
+            
+            # 计算弧的半径
+            arc_radius = min(15, min(len_v1, len_v2) / 3)
+            
+            # 计算起始角度和结束角度
+            start_angle = math.degrees(math.atan2(-v1.y(), v1.x()))
+            end_angle = math.degrees(math.atan2(-v2.y(), v2.x()))
+            
+            # 确保角度是小于180度的
+            angle_diff = (end_angle - start_angle) % 360
+            if angle_diff > 180:
+                angle_diff = 360 - angle_diff
+                temp = start_angle
+                start_angle = end_angle
+                end_angle = temp
+            
+            # 创建弧形路径
+            path = QtGui.QPainterPath()
+            path.moveTo(p2.x() + arc_radius * v1_unit.x(), 
+                       p2.y() + arc_radius * v1_unit.y())
+            
+            # 添加弧形
+            rect = QtCore.QRectF(
+                p2.x() - arc_radius,
+                p2.y() - arc_radius,
+                arc_radius * 2,
+                arc_radius * 2
+            )
+            
+            # 计算角度范围
+            span_angle = angle_diff
+            
+            # 添加弧形到路径
+            path.arcTo(rect, start_angle, span_angle)
+            
+            # 绘制路径
+            path_item = self.scene.addPath(path, pen)
+            
+            # 添加角度文本
+            # 计算文本位置（在角度外侧）
+            text_radius = arc_radius * 1.5
+            mid_angle = math.radians((start_angle + end_angle) / 2)
+            text_x = p2.x() + text_radius * math.cos(mid_angle)
+            text_y = p2.y() - text_radius * math.sin(mid_angle)
+            
+            # 创建文本项 - 显示一位小数
+            text = QtWidgets.QGraphicsTextItem(f"{angle['angle']:.1f}°")
+            text.setPos(text_x - 15, text_y - 10)  # 调整位置使文本居中
+            text.setDefaultTextColor(QtGui.QColor(0, 200, 0))
+            
+            # 设置文本字体
+            font = QtGui.QFont()
+            font.setBold(True)
+            font.setPointSize(10)
+            text.setFont(font)
+            
+            # 使用白色背景确保文本可见
+            text_bg = QtWidgets.QGraphicsRectItem(text.boundingRect())
+            text_bg.setBrush(QtGui.QBrush(QtGui.QColor(255, 255, 255)))
+            text_bg.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+            text_bg.setPos(text_x - 15, text_y - 10)
+            
+            # 先添加背景，再添加文本
+            self.scene.addItem(text_bg)
+            self.scene.addItem(text)
+        
+        # 绘制正在测量的角度
+        if self.angle_measuring and len(self.angle_points) > 0:
+            # 绘制已有的点
+            for i, point in enumerate(self.angle_points):
+                # 限制点在图像边界内
+                constrained_point = self.constrain_point_to_image(point)
+                rect = QtWidgets.QGraphicsRectItem(
+                    constrained_point.x() - 2, constrained_point.y() - 2, 4, 4
+                )
+                rect.setBrush(QtGui.QBrush(QtGui.QColor(0, 200, 0)))
+                rect.setPen(pen)
+                self.scene.addItem(rect)
+            
+            # 绘制第一条线段（从第一个点到鼠标位置）
+            if len(self.angle_points) == 1 and self.end_point:
+                # 限制点在图像边界内
+                constrained_p1 = self.constrain_point_to_image(self.angle_points[0])
+                constrained_end = self.constrain_point_to_image(self.end_point)
+                line = self.scene.addLine(
+                    constrained_p1.x(), constrained_p1.y(),
+                    constrained_end.x(), constrained_end.y(),
+                    pen
+                )
+            
+            # 绘制第一条完成的线段（从第一个点到顶点）
+            if len(self.angle_points) >= 2:
+                # 限制点在图像边界内
+                constrained_p1 = self.constrain_point_to_image(self.angle_points[0])
+                constrained_p2 = self.constrain_point_to_image(self.angle_points[1])
+                line = self.scene.addLine(
+                    constrained_p2.x(), constrained_p2.y(),  # 顶点
+                    constrained_p1.x(), constrained_p1.y(),  # 第一个点
+                    pen
+                )
+            
+            # 绘制第二条线段（从顶点到鼠标位置或第三个点）
+            if len(self.angle_points) == 2 and self.end_point:
+                # 限制点在图像边界内
+                constrained_p2 = self.constrain_point_to_image(self.angle_points[1])
+                constrained_end = self.constrain_point_to_image(self.end_point)
+                line = self.scene.addLine(
+                    constrained_p2.x(), constrained_p2.y(),  # 顶点
+                    constrained_end.x(), constrained_end.y(),  # 鼠标位置
+                    pen
+                )
+                
+                # 计算并显示角度
+                angle_value = self.calculate_angle(
+                    self.angle_points[0], 
+                    self.angle_points[1], 
+                    self.angle_points[2]
+                )
+                
+                # 绘制角度弧和文本（与上面的代码类似）
+                # 计算向量
+                v1 = QtCore.QPointF(
+                    self.angle_points[0].x() - self.angle_points[1].x(), 
+                    self.angle_points[0].y() - self.angle_points[1].y()
+                )
+                v2 = QtCore.QPointF(
+                    self.angle_points[2].x() - self.angle_points[1].x(), 
+                    self.angle_points[2].y() - self.angle_points[1].y()
+                )
+                
+                # 计算向量长度
+                len_v1 = math.sqrt(v1.x() ** 2 + v1.y() ** 2)
+                len_v2 = math.sqrt(v2.x() ** 2 + v2.y() ** 2)
+                
+                # 计算单位向量
+                if len_v1 > 0:
+                    v1_unit = QtCore.QPointF(v1.x() / len_v1, v1.y() / len_v1)
+                else:
+                    v1_unit = QtCore.QPointF(0, 0)
+                    
+                if len_v2 > 0:
+                    v2_unit = QtCore.QPointF(v2.x() / len_v2, v2.y() / len_v2)
+                else:
+                    v2_unit = QtCore.QPointF(0, 0)
+                
+                # 计算弧的半径
+                arc_radius = min(15, min(len_v1, len_v2) / 3)
+                
+                # 计算起始角度和结束角度
+                start_angle = math.degrees(math.atan2(-v1.y(), v1.x()))
+                end_angle = math.degrees(math.atan2(-v2.y(), v2.x()))
+                
+                # 确保角度是小于180度的
+                angle_diff = (end_angle - start_angle) % 360
+                if angle_diff > 180:
+                    angle_diff = 360 - angle_diff
+                    temp = start_angle
+                    start_angle = end_angle
+                    end_angle = temp
+                
+                # 创建弧形路径
+                path = QtGui.QPainterPath()
+                path.moveTo(
+                    self.angle_points[1].x() + arc_radius * v1_unit.x(), 
+                    self.angle_points[1].y() + arc_radius * v1_unit.y()
+                )
+                
+                # 添加弧形
+                rect = QtCore.QRectF(
+                    self.angle_points[1].x() - arc_radius,
+                    self.angle_points[1].y() - arc_radius,
+                    arc_radius * 2,
+                    arc_radius * 2
+                )
+                
+                # 计算角度范围
+                span_angle = angle_diff
+                
+                # 添加弧形到路径
+                path.arcTo(rect, start_angle, span_angle)
+                
+                # 绘制路径
+                path_item = self.scene.addPath(path, pen)
+                
+                # 添加角度文本
+                # 计算文本位置（在角度外侧）
+                text_radius = arc_radius * 1.5
+                mid_angle = math.radians((start_angle + end_angle) / 2)
+                text_x = self.angle_points[1].x() + text_radius * math.cos(mid_angle)
+                text_y = self.angle_points[1].y() - text_radius * math.sin(mid_angle)
+                
+                # 创建文本项 - 显示一位小数
+                text = QtWidgets.QGraphicsTextItem(f"{angle_value:.1f}°")
+                text.setPos(text_x - 15, text_y - 10)  # 调整位置使文本居中
+                text.setDefaultTextColor(QtGui.QColor(0, 200, 0))
+                
+                # 设置文本字体
+                font = QtGui.QFont()
+                font.setBold(True)
+                font.setPointSize(10)
+                text.setFont(font)
+                
+                # 使用白色背景确保文本可见
+                text_bg = QtWidgets.QGraphicsRectItem(text.boundingRect())
+                text_bg.setBrush(QtGui.QBrush(QtGui.QColor(255, 255, 255)))
+                text_bg.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+                text_bg.setPos(text_x - 15, text_y - 10)
+                
+                # 先添加背景，再添加文本
+                self.scene.addItem(text_bg)
+                self.scene.addItem(text)
+                
+                # 更新状态栏显示当前角度
+                if hasattr(self, 'parent_controller') and self.parent_controller and hasattr(self.parent_controller, 'statusBar'):
+                    self.parent_controller.statusBar().showMessage(f"角度测量: {angle_value:.1f}°")
+        
+        # 绘制对应的角度（其他视图中的角度）
+        other_pen = QtGui.QPen(QtGui.QColor(0, 100, 255))  # 蓝绿色
+        other_pen.setWidth(1)
+        
+        for angle in self.corresponding_angles:
+            # 绘制两条线段
+            line1 = self.scene.addLine(
+                angle['p2'].x(), angle['p2'].y(),
+                angle['p1'].x(), angle['p1'].y(),
+                other_pen
+            )
+            
+            line2 = self.scene.addLine(
+                angle['p2'].x(), angle['p2'].y(),
+                angle['p3'].x(), angle['p3'].y(),
+                other_pen
+            )
+            
+            # 在三个点上绘制小方块标记
+            for point in ['p1', 'p2', 'p3']:
+                rect = QtWidgets.QGraphicsRectItem(
+                    angle[point].x() - 2, angle[point].y() - 2, 4, 4
+                )
+                rect.setBrush(QtGui.QBrush(QtGui.QColor(0, 100, 255)))
+                rect.setPen(other_pen)
+                self.scene.addItem(rect)
+            
+            # 绘制角度弧和文本（与上面的代码类似）
+            if 'angle' in angle:
+                # 计算向量
+                v1 = QtCore.QPointF(angle['p1'].x() - angle['p2'].x(), angle['p1'].y() - angle['p2'].y())
+                v2 = QtCore.QPointF(angle['p3'].x() - angle['p2'].x(), angle['p3'].y() - angle['p2'].y())
+                
+                # 计算向量长度
+                len_v1 = math.sqrt(v1.x() ** 2 + v1.y() ** 2)
+                len_v2 = math.sqrt(v2.x() ** 2 + v2.y() ** 2)
+                
+                # 计算单位向量
+                if len_v1 > 0:
+                    v1_unit = QtCore.QPointF(v1.x() / len_v1, v1.y() / len_v1)
+                else:
+                    v1_unit = QtCore.QPointF(0, 0)
+                    
+                if len_v2 > 0:
+                    v2_unit = QtCore.QPointF(v2.x() / len_v2, v2.y() / len_v2)
+                else:
+                    v2_unit = QtCore.QPointF(0, 0)
+                
+                # 计算弧的半径
+                arc_radius = min(15, min(len_v1, len_v2) / 3)
+                
+                # 计算起始角度和结束角度
+                start_angle = math.degrees(math.atan2(-v1.y(), v1.x()))
+                end_angle = math.degrees(math.atan2(-v2.y(), v2.x()))
+                
+                # 确保角度是小于180度的
+                angle_diff = (end_angle - start_angle) % 360
+                if angle_diff > 180:
+                    angle_diff = 360 - angle_diff
+                    temp = start_angle
+                    start_angle = end_angle
+                    end_angle = temp
+                
+                # 创建弧形路径
+                path = QtGui.QPainterPath()
+                path.moveTo(angle['p2'].x() + arc_radius * v1_unit.x(), 
+                           angle['p2'].y() + arc_radius * v1_unit.y())
+                
+                # 添加弧形
+                rect = QtCore.QRectF(
+                    angle['p2'].x() - arc_radius,
+                    angle['p2'].y() - arc_radius,
+                    arc_radius * 2,
+                    arc_radius * 2
+                )
+                
+                # 计算角度范围
+                span_angle = angle_diff
+                
+                # 添加弧形到路径
+                path.arcTo(rect, start_angle, span_angle)
+                
+                # 绘制路径
+                path_item = self.scene.addPath(path, other_pen)
+                
+                # 添加角度文本
+                # 计算文本位置（在角度外侧）
+                text_radius = arc_radius * 1.5
+                mid_angle = math.radians((start_angle + end_angle) / 2)
+                text_x = angle['p2'].x() + text_radius * math.cos(mid_angle)
+                text_y = angle['p2'].y() - text_radius * math.sin(mid_angle)
+                
+                # 创建文本项 - 显示一位小数
+                text = QtWidgets.QGraphicsTextItem(f"{angle['angle']:.1f}°")
+                text.setPos(text_x - 15, text_y - 10)  # 调整位置使文本居中
+                text.setDefaultTextColor(QtGui.QColor(0, 100, 255))
+                
+                # 设置文本字体
+                font = QtGui.QFont()
+                font.setBold(True)
+                font.setPointSize(10)
+                text.setFont(font)
+                
+                # 使用白色背景确保文本可见
+                text_bg = QtWidgets.QGraphicsRectItem(text.boundingRect())
+                text_bg.setBrush(QtGui.QBrush(QtGui.QColor(255, 255, 255)))
+                text_bg.setPen(QtGui.QPen(QtCore.Qt.NoPen))
+                text_bg.setPos(text_x - 15, text_y - 10)
+                
+                # 先添加背景，再添加文本
+                self.scene.addItem(text_bg)
+                self.scene.addItem(text)
         
         for line in self.corresponding_lines:
             # 绘制线段
@@ -835,6 +1735,10 @@ class SliceViewer(QtWidgets.QWidget):
         scene_start = QtCore.QPointF(start.x(), start.y())
         scene_end = QtCore.QPointF(end.x(), end.y())
         
+        # 限制点在图像边界内
+        scene_start = self.constrain_point_to_image(scene_start)
+        scene_end = self.constrain_point_to_image(scene_end)
+        
         # 如果没有提供距离，则计算距离
         if distance is None:
             distance = math.sqrt((scene_end.x() - scene_start.x())**2 + (scene_end.y() - scene_start.y())**2)
@@ -847,4 +1751,40 @@ class SliceViewer(QtWidgets.QWidget):
         })
         
         # 重绘测量线
+        self.redraw_measurement_lines()
+        
+    def add_corresponding_angle(self, p1, p2, p3, angle=None):
+        """
+        添加对应的角度（其他视图中的角度）
+        
+        参数
+        ----
+        p1, p2, p3 : QPoint
+            构成角度的三个点，p2是角的顶点
+        angle : float, optional
+            角度值，如果为None则自动计算
+        """
+        # 转换为场景坐标
+        scene_p1 = QtCore.QPointF(p1.x(), p1.y())
+        scene_p2 = QtCore.QPointF(p2.x(), p2.y())
+        scene_p3 = QtCore.QPointF(p3.x(), p3.y())
+        
+        # 限制点在图像边界内
+        scene_p1 = self.constrain_point_to_image(scene_p1)
+        scene_p2 = self.constrain_point_to_image(scene_p2)
+        scene_p3 = self.constrain_point_to_image(scene_p3)
+        
+        # 如果没有提供角度，则计算角度
+        if angle is None:
+            angle = self.calculate_angle(scene_p1, scene_p2, scene_p3)
+        
+        # 添加到对应角度列表
+        self.corresponding_angles.append({
+            'p1': scene_p1,
+            'p2': scene_p2,
+            'p3': scene_p3,
+            'angle': angle
+        })
+        
+        # 重绘测量线和角度
         self.redraw_measurement_lines()

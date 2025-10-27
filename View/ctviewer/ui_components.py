@@ -224,6 +224,10 @@ class UIComponents:
         distance_action.triggered.connect(self.measure_distance)
         measure_menu.addAction(distance_action)
         
+        angle_action = QtWidgets.QAction("角度", self)
+        angle_action.triggered.connect(self.measure_angle)
+        measure_menu.addAction(angle_action)
+        
         # 使用QMainWindow的setMenuBar方法，菜单栏会自动显示在窗口顶部
         self.setMenuBar(self.menu_bar)
     
