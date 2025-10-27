@@ -5,6 +5,9 @@
 
 from PyQt5 import QtWidgets, QtCore
 from Traditional.Filter.filter_op import Filter_op
+from Traditional.Filter.median_filter_dialog import MedianFilterDialog
+from Traditional.Filter.gaussian_filter_dialog import GaussianFilterDialog
+from Traditional.Filter.bilateral_filter_dialog import BilateralFilterDialog
 
 
 class FilterOperations:
@@ -132,4 +135,103 @@ class FilterOperations:
             
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "错误", f"应用曲率流去噪时出错：{str(e)}")
+    
+    def apply_median_filter(self):
+        """应用中值滤波"""
+        if not hasattr(self, 'array') or self.array is None:
+            QtWidgets.QMessageBox.warning(self, "警告", "请先加载数据")
+            return
+            
+        try:
+            # 弹出中值滤波对话框
+            dialog = MedianFilterDialog(self.array, spacing=self.spacing, parent=self)
+            
+            if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                # 获取滤波结果
+                filtered_array = dialog.get_result()
+                
+                if filtered_array is not None:
+                    # 更新当前数组
+                    self.array = filtered_array
+                    
+                    # 显示成功消息
+                    QtWidgets.QMessageBox.information(self, "成功", "中值滤波处理完成，正在更新视图...")
+                    QtWidgets.QApplication.processEvents()
+                    
+                    # 更新视图
+                    self.update_viewers()
+                    
+                    # 通知用户完成
+                    QtWidgets.QMessageBox.information(self, "成功", "视图已更新")
+                else:
+                    QtWidgets.QMessageBox.warning(self, "警告", "滤波处理未返回结果")
+            
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "错误", f"应用中值滤波时出错：{str(e)}")
+            
+    def apply_gaussian_filter(self):
+        """应用高斯滤波"""
+        if not hasattr(self, 'array') or self.array is None:
+            QtWidgets.QMessageBox.warning(self, "警告", "请先加载数据")
+            return
+            
+        try:
+            # 弹出高斯滤波对话框
+            dialog = GaussianFilterDialog(self.array, spacing=self.spacing, parent=self)
+            
+            if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                # 获取滤波结果
+                filtered_array = dialog.get_result()
+                
+                if filtered_array is not None:
+                    # 更新当前数组
+                    self.array = filtered_array
+                    
+                    # 显示成功消息
+                    QtWidgets.QMessageBox.information(self, "成功", "高斯滤波处理完成，正在更新视图...")
+                    QtWidgets.QApplication.processEvents()
+                    
+                    # 更新视图
+                    self.update_viewers()
+                    
+                    # 通知用户完成
+                    QtWidgets.QMessageBox.information(self, "成功", "视图已更新")
+                else:
+                    QtWidgets.QMessageBox.warning(self, "警告", "滤波处理未返回结果")
+            
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "错误", f"应用高斯滤波时出错：{str(e)}")
+            
+    def apply_bilateral_filter(self):
+        """应用双边滤波（偏差滤波）"""
+        if not hasattr(self, 'array') or self.array is None:
+            QtWidgets.QMessageBox.warning(self, "警告", "请先加载数据")
+            return
+            
+        try:
+            # 弹出双边滤波对话框
+            dialog = BilateralFilterDialog(self.array, spacing=self.spacing, parent=self)
+            
+            if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                # 获取滤波结果
+                filtered_array = dialog.get_result()
+                
+                if filtered_array is not None:
+                    # 更新当前数组
+                    self.array = filtered_array
+                    
+                    # 显示成功消息
+                    QtWidgets.QMessageBox.information(self, "成功", "双边滤波处理完成，正在更新视图...")
+                    QtWidgets.QApplication.processEvents()
+                    
+                    # 更新视图
+                    self.update_viewers()
+                    
+                    # 通知用户完成
+                    QtWidgets.QMessageBox.information(self, "成功", "视图已更新")
+                else:
+                    QtWidgets.QMessageBox.warning(self, "警告", "滤波处理未返回结果")
+            
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "错误", f"应用双边滤波时出错：{str(e)}")
 

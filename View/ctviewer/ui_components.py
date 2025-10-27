@@ -183,6 +183,18 @@ class UIComponents:
         curvature_action.triggered.connect(self.apply_curvature_flow_filter)
         filter_menu.addAction(curvature_action)
         
+        median_action = QtWidgets.QAction("中值", self)
+        median_action.triggered.connect(self.apply_median_filter)
+        filter_menu.addAction(median_action)
+        
+        gaussian_action = QtWidgets.QAction("高斯", self)
+        gaussian_action.triggered.connect(self.apply_gaussian_filter)
+        filter_menu.addAction(gaussian_action)
+        
+        bilateral_action = QtWidgets.QAction("双边", self)
+        bilateral_action.triggered.connect(self.apply_bilateral_filter)
+        filter_menu.addAction(bilateral_action)
+        
         # CT重建菜单
         ct_menu = self.menu_bar.addMenu("CT重建")
         ball_phantom_action = QtWidgets.QAction("多球标定", self)
