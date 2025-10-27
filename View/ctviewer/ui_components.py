@@ -218,6 +218,12 @@ class UIComponents:
         # 配准菜单（占位）
         config_menu = self.menu_bar.addMenu("配准")
         
+        # 测量菜单
+        measure_menu = self.menu_bar.addMenu("测量")
+        distance_action = QtWidgets.QAction("距离", self)
+        distance_action.triggered.connect(self.measure_distance)
+        measure_menu.addAction(distance_action)
+        
         # 使用QMainWindow的setMenuBar方法，菜单栏会自动显示在窗口顶部
         self.setMenuBar(self.menu_bar)
     
