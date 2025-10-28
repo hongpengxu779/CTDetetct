@@ -243,6 +243,10 @@ class DataLoader:
             # 更新显示
             self.setWindowTitle(f"CT Viewer - {os.path.basename(filename)}")
             
+            # 更新灰度直方图
+            if hasattr(self, 'update_histogram'):
+                self.update_histogram(self.array)
+            
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -289,6 +293,10 @@ class DataLoader:
         self.grid_layout.addWidget(self.sag_viewer, 0, 1)
         self.grid_layout.addWidget(self.cor_viewer, 1, 0)
         self.grid_layout.addWidget(self.volume_viewer, 1, 1)
+        
+        # 更新灰度直方图
+        if hasattr(self, 'update_histogram'):
+            self.update_histogram(self.array)
     
     def load_reconstructed_data(self, image, array, title="重建数据"):
         """
@@ -384,6 +392,10 @@ class DataLoader:
             
             # 更新窗口标题
             self.setWindowTitle(f"CT Viewer - {title}")
+            
+            # 更新灰度直方图
+            if hasattr(self, 'update_histogram'):
+                self.update_histogram(self.array)
             
             # 显示成功消息
             QtWidgets.QMessageBox.information(self, "成功", f"已加载{title}")
@@ -562,6 +574,10 @@ class DataLoader:
             
             # 更新窗口标题
             self.setWindowTitle(f"CT Viewer - {title}")
+            
+            # 更新灰度直方图
+            if hasattr(self, 'update_histogram'):
+                self.update_histogram(self.raw_array)
             
             print(f"成功加载 {title}")
             print(f"窗宽窗位控制已启用: WW={self.window_width}, WL={self.window_level}")

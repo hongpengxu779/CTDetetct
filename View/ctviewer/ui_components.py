@@ -4,6 +4,20 @@ CT查看器UI组件
 """
 
 from PyQt5 import QtWidgets, QtCore
+import numpy as np
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+import matplotlib
+import platform
+
+# 设置matplotlib中文字体支持
+if platform.system() == 'Windows':
+    matplotlib.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'SimSun']
+elif platform.system() == 'Darwin':  # macOS
+    matplotlib.rcParams['font.sans-serif'] = ['PingFang SC', 'STHeiti', 'Arial Unicode MS']
+else:  # Linux
+    matplotlib.rcParams['font.sans-serif'] = ['WenQuanYi Micro Hei', 'DejaVu Sans']
+matplotlib.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
 
 
 class UIComponents:
@@ -424,62 +438,105 @@ class UIComponents:
         
         # 创建右侧面板（垂直分割成上下两部分）
         self.right_panel = QtWidgets.QWidget()
-        self.right_panel.setMaximumWidth(280)
-        self.right_panel.setMinimumWidth(200)
+        self.right_panel.setMaximumWidth(350)
+        self.right_panel.setMinimumWidth(280)
         self.right_panel.setStyleSheet("background-color: #eceff1;")  # 浅灰色背景
         right_panel_layout = QtWidgets.QVBoxLayout(self.right_panel)
-        right_panel_layout.setContentsMargins(5, 5, 5, 5)
+        right_panel_layout.setContentsMargins(8, 8, 8, 8)
         right_panel_layout.setSpacing(10)  # 增加两个面板之间的间距
         
-        # 热磁图层面板（上半部分）
+        # 热磁图层面板（上半部分） - 浅色风格
         heatmap_panel = QtWidgets.QWidget()
         heatmap_panel.setStyleSheet("""
             QWidget {
-                background-color: #b0bec5;
-                border: 2px solid #78909c;
-                border-radius: 6px;
+                background-color: #f5f5f5;
+                border: 1px solid #d0d0d0;
+                border-radius: 2px;
             }
         """)
         heatmap_layout = QtWidgets.QVBoxLayout(heatmap_panel)
-        heatmap_layout.setContentsMargins(10, 10, 10, 10)
-        heatmap_label = QtWidgets.QLabel("热磁图层")
+        heatmap_layout.setContentsMargins(2, 2, 2, 2)
+        heatmap_layout.setSpacing(2)
+        
+        # 标题栏
+        heatmap_label = QtWidgets.QLabel("热力图层叠加")
         heatmap_label.setStyleSheet("""
             QLabel {
-                color: #37474f; 
-                font-size: 12pt; 
-                font-weight: bold;
+                color: #424242; 
+                font-size: 10pt; 
                 background-color: transparent;
                 border: none;
+                padding: 4px;
             }
         """)
         heatmap_label.setAlignment(QtCore.Qt.AlignCenter)
         heatmap_layout.addWidget(heatmap_label)
-        heatmap_layout.addStretch()
         
-        # 灰度直方图面板（下半部分）
-        histogram_panel = QtWidgets.QWidget()
-        histogram_panel.setStyleSheet("""
-            QWidget {
-                background-color: #b0bec5;
-                border: 2px solid #78909c;
-                border-radius: 6px;
-            }
-        """)
-        histogram_layout = QtWidgets.QVBoxLayout(histogram_panel)
-        histogram_layout.setContentsMargins(10, 10, 10, 10)
-        histogram_label = QtWidgets.QLabel("灰度直方图")
-        histogram_label.setStyleSheet("""
+        # 提示信息
+        heatmap_info = QtWidgets.QLabel("功能开发中")
+        heatmap_info.setStyleSheet("""
             QLabel {
-                color: #37474f; 
-                font-size: 12pt; 
-                font-weight: bold;
+                color: #999999;
+                font-size: 10pt;
                 background-color: transparent;
                 border: none;
             }
         """)
+        heatmap_info.setAlignment(QtCore.Qt.AlignCenter)
+        heatmap_layout.addWidget(heatmap_info)
+        
+        heatmap_layout.addStretch()
+        
+        # 灰度直方图面板（下半部分） - 浅色背景风格
+        histogram_panel = QtWidgets.QWidget()
+        histogram_panel.setStyleSheet("""
+            QWidget {
+                background-color: #f5f5f5;
+                border: 1px solid #d0d0d0;
+                border-radius: 2px;
+            }
+        """)
+        histogram_layout = QtWidgets.QVBoxLayout(histogram_panel)
+        histogram_layout.setContentsMargins(2, 2, 2, 2)
+        histogram_layout.setSpacing(2)
+        
+        # 标题栏 - 简洁风格
+        histogram_label = QtWidgets.QLabel("灰度直方图")
+        histogram_label.setStyleSheet("""
+            QLabel {
+                color: #424242; 
+                font-size: 10pt; 
+                background-color: transparent;
+                border: none;
+                padding: 4px;
+            }
+        """)
         histogram_label.setAlignment(QtCore.Qt.AlignCenter)
         histogram_layout.addWidget(histogram_label)
-        histogram_layout.addStretch()
+        
+        # 创建matplotlib图形用于显示直方图 - 浅色背景
+        self.histogram_figure = Figure(facecolor='#f5f5f5')
+        self.histogram_canvas = FigureCanvas(self.histogram_figure)
+        self.histogram_canvas.setStyleSheet("background-color: #f5f5f5;")
+        self.histogram_ax = self.histogram_figure.add_subplot(111)
+        
+        # 初始化空直方图 - 浅色背景
+        self.histogram_ax.set_facecolor('white')
+        self.histogram_ax.text(0.5, 0.5, '等待数据导入', 
+                              transform=self.histogram_ax.transAxes,
+                              ha='center', va='center',
+                              fontsize=10, color='#999999')
+        self.histogram_ax.tick_params(labelsize=8, colors='#666666')
+        
+        # 设置坐标轴颜色为浅色主题
+        self.histogram_ax.spines['bottom'].set_color('#cccccc')
+        self.histogram_ax.spines['left'].set_color('#cccccc')
+        self.histogram_ax.spines['top'].set_visible(False)
+        self.histogram_ax.spines['right'].set_visible(False)
+        
+        self.histogram_canvas.draw()
+        
+        histogram_layout.addWidget(self.histogram_canvas, 1)  # 添加stretch factor让画布填充
         
         # 将两个面板添加到右侧布局（上下排列，各占50%）
         right_panel_layout.addWidget(heatmap_panel, 1)
@@ -489,9 +546,13 @@ class UIComponents:
         main_splitter.addWidget(self.right_panel)
         
         # 设置分割器的初始尺寸比例（左侧固定，中间自适应，右侧固定）
-        main_splitter.setStretchFactor(0, 0)  # 左侧工具栏
-        main_splitter.setStretchFactor(1, 1)  # 中间视图区域
-        main_splitter.setStretchFactor(2, 0)  # 右侧面板
+        main_splitter.setStretchFactor(0, 0)  # 左侧工具栏 - 不拉伸
+        main_splitter.setStretchFactor(1, 3)  # 中间视图区域 - 主要区域，拉伸因子为3
+        main_splitter.setStretchFactor(2, 0)  # 右侧面板 - 不拉伸
+        
+        # 设置初始分割比例
+        total_width = 1600  # 假设的总宽度
+        main_splitter.setSizes([200, 1050, 350])  # 左侧:中间:右侧 的比例
         
         # 使用QMainWindow的setCentralWidget方法设置中心部件
         self.setCentralWidget(main_splitter)
@@ -564,4 +625,98 @@ class UIComponents:
         )
         if filepath:
             self.import_roi_info(filepath)
+    
+    def update_histogram(self, data_array):
+        """
+        更新灰度直方图显示 - VGStudio风格
+        
+        参数
+        ----
+        data_array : np.ndarray
+            要显示直方图的数组数据
+        """
+        if not hasattr(self, 'histogram_ax'):
+            return
+        
+        try:
+            from matplotlib.colors import LinearSegmentedColormap
+            
+            # 清除之前的直方图
+            self.histogram_ax.clear()
+            
+            # 对于大数据集，使用采样以加快计算
+            if data_array.size > 1e7:  # 如果数据量大于1000万像素
+                # 随机采样10%的数据
+                sample_size = int(data_array.size * 0.1)
+                flat_data = data_array.flatten()
+                sample_indices = np.random.choice(flat_data.size, sample_size, replace=False)
+                sampled_data = flat_data[sample_indices]
+            else:
+                sampled_data = data_array.flatten()
+            
+            # 计算直方图（使用256个bins）
+            hist_values, bin_edges = np.histogram(sampled_data, bins=256)
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+            
+            # VGStudio风格：使用灰度渐变填充
+            # 创建灰度渐变colormap - 从深灰到浅灰
+            colors = [(0.15, 0.15, 0.15), (0.5, 0.5, 0.5), (0.85, 0.85, 0.85)]
+            n_bins = len(bin_centers)
+            cmap = LinearSegmentedColormap.from_list('grayscale', colors, N=n_bins)
+            
+            # 为每个bin生成对应的颜色
+            bar_colors = [cmap(i / n_bins) for i in range(n_bins)]
+            
+            # 一次性绘制所有柱状图（更高效）
+            bar_width = bin_edges[1] - bin_edges[0]
+            self.histogram_ax.bar(bin_centers, hist_values, 
+                                 width=bar_width * 0.95,  # 稍微缩小避免重叠
+                                 color=bar_colors,
+                                 edgecolor='none')
+            
+            # 设置浅色背景
+            self.histogram_ax.set_facecolor('white')
+            self.histogram_figure.patch.set_facecolor('#f5f5f5')
+            
+            # 不显示坐标轴标签
+            self.histogram_ax.set_xlabel('')
+            self.histogram_ax.set_ylabel('')
+            self.histogram_ax.tick_params(labelsize=8, colors='#666666')
+            
+            # 设置坐标轴样式 - 浅色主题
+            self.histogram_ax.spines['bottom'].set_color('#cccccc')
+            self.histogram_ax.spines['left'].set_color('#cccccc')
+            self.histogram_ax.spines['top'].set_visible(False)
+            self.histogram_ax.spines['right'].set_visible(False)
+            
+            # 添加统计信息 - 浅色主题版本
+            data_min = float(sampled_data.min())
+            data_max = float(sampled_data.max())
+            data_mean = float(sampled_data.mean())
+            data_std = float(sampled_data.std())
+            
+            stats_text = f'最小值: {data_min:.0f}\n最大值: {data_max:.0f}\n平均值: {data_mean:.1f}\n标准差: {data_std:.1f}'
+            
+            self.histogram_ax.text(0.98, 0.97, stats_text, 
+                                  transform=self.histogram_ax.transAxes,
+                                  verticalalignment='top', 
+                                  horizontalalignment='right',
+                                  fontsize=7.5,
+                                  color='#424242',
+                                  bbox=dict(boxstyle='round,pad=0.5', 
+                                           facecolor='white', 
+                                           edgecolor='#d0d0d0',
+                                           alpha=0.9,
+                                           linewidth=1))
+            
+            # 调整布局让图表填充满整个区域
+            self.histogram_figure.tight_layout(pad=0.5)
+            self.histogram_canvas.draw()
+            
+            print(f"直方图已更新: 数据范围 [{data_min:.0f}, {data_max:.0f}], 均值 {data_mean:.1f}")
+            
+        except Exception as e:
+            print(f"更新直方图时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
 

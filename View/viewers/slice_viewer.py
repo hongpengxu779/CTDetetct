@@ -90,13 +90,6 @@ class SliceViewer(QtWidgets.QWidget):
         
         title_layout.addStretch()
         
-        # 放大按钮
-        zoom_btn = QtWidgets.QPushButton("🔍")
-        zoom_btn.setMaximumWidth(40)
-        zoom_btn.setToolTip("在新窗口中打开，可缩放和平移")
-        zoom_btn.clicked.connect(self.open_zoom_window)
-        title_layout.addWidget(zoom_btn)
-        
         main_layout.addLayout(title_layout)
 
         # 创建一个QGraphicsView用于显示图像和测量线
@@ -112,6 +105,31 @@ class SliceViewer(QtWidgets.QWidget):
         self.pixmap_item = QtWidgets.QGraphicsPixmapItem()
         self.scene.addItem(self.pixmap_item)
         
+        # 创建放大按钮作为视图的叠加层
+        self.zoom_btn = QtWidgets.QPushButton("🔍", self.view)
+        self.zoom_btn.setFixedSize(32, 32)
+        self.zoom_btn.setToolTip("在新窗口中打开，可缩放和平移")
+        self.zoom_btn.clicked.connect(self.open_zoom_window)
+        self.zoom_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(255, 255, 255, 200);
+                border: 1px solid #aaaaaa;
+                border-radius: 4px;
+                font-size: 16px;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: rgba(230, 230, 230, 220);
+                border: 1px solid #888888;
+            }
+            QPushButton:pressed {
+                background-color: rgba(200, 200, 200, 220);
+            }
+        """)
+        self.zoom_btn.setCursor(QtCore.Qt.PointingHandCursor)
+        # 初始位置会在resizeEvent中设置
+        self.zoom_btn.raise_()  # 确保按钮在最上层
+        
         # 添加视图到布局
         main_layout.addWidget(self.view)
 
@@ -126,8 +144,17 @@ class SliceViewer(QtWidgets.QWidget):
         # 默认显示中间切片
         self.slider.setValue(max_index // 2)
         
+        # 初始化放大按钮位置
+        QtCore.QTimer.singleShot(0, self._update_zoom_button_position)
+        
         # 安装事件过滤器以处理鼠标事件
         self.view.viewport().installEventFilter(self)
+    
+    def _update_zoom_button_position(self):
+        """更新放大按钮位置到视图右上角"""
+        if hasattr(self, 'zoom_btn') and hasattr(self, 'view'):
+            view_width = self.view.width()
+            self.zoom_btn.move(view_width - self.zoom_btn.width() - 8, 8)
     
     def open_zoom_window(self):
         """打开缩放窗口（简化版，无窗宽窗位控制）"""
@@ -189,6 +216,9 @@ class SliceViewer(QtWidgets.QWidget):
     def resizeEvent(self, event):
         """处理窗口大小变化事件"""
         super().resizeEvent(event)
+        
+        # 更新放大按钮的位置到视图内部右上角
+        self._update_zoom_button_position()
         
         # 获取当前场景矩形
         scene_rect = self.scene.sceneRect()
