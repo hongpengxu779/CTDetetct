@@ -152,6 +152,10 @@ class DataLoader:
             data_max = float(self.array.max())
             print(f"转换后数据范围: [{data_min}, {data_max}]")
             
+            # 设置raw_array用于ROI 3D预览（必须在创建视图之前！）
+            self.raw_array = self.array
+            print(f"raw_array已设置，形状: {self.raw_array.shape}")
+            
             # 如果数据范围很小或全为0，可能是分割结果且没有检测到目标
             if data_max == 0 or (data_max - data_min) < 1:
                 QtWidgets.QMessageBox.warning(
@@ -188,6 +192,30 @@ class DataLoader:
                 self.cor_viewer = SliceViewer("Coronal",
                                         lambda y: self.array[:, y, :],
                                         self.depth_y)
+            
+            # 更新ROI Z范围滑动条
+            if hasattr(self, 'roi_z_min_slider'):
+                self.roi_z_min_slider.setMaximum(self.depth_z - 1)
+                self.roi_z_max_slider.setMaximum(self.depth_z - 1)
+                self.roi_z_max_slider.setValue(min(50, self.depth_z - 1))  # 默认范围设为50层或最大值
+                
+                print(f"ROI Z范围滑动条已更新: 0 - {self.depth_z - 1}")
+            
+            # 更新ROI X范围滑动条
+            if hasattr(self, 'roi_x_min_slider'):
+                self.roi_x_min_slider.setMaximum(self.depth_x - 1)
+                self.roi_x_max_slider.setMaximum(self.depth_x - 1)
+                self.roi_x_max_slider.setValue(self.depth_x - 1)  # 默认设为最大值
+                
+                print(f"ROI X范围滑动条已更新: 0 - {self.depth_x - 1}")
+            
+            # 更新ROI Y范围滑动条
+            if hasattr(self, 'roi_y_min_slider'):
+                self.roi_y_min_slider.setMaximum(self.depth_y - 1)
+                self.roi_y_max_slider.setMaximum(self.depth_y - 1)
+                self.roi_y_max_slider.setValue(self.depth_y - 1)  # 默认设为最大值
+                
+                print(f"ROI Y范围滑动条已更新: 0 - {self.depth_y - 1}")
             
             # 只有在数据不全为0时才创建3D视图
             if data_max > 0:

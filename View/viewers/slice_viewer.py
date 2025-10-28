@@ -54,6 +54,16 @@ class SliceViewer(QtWidgets.QWidget):
         self.active_angle_index = -1  # 当前活动的角度索引
         self.dragging_angle_point = None  # 正在拖动的角度点索引 (0, 1, 2)
         
+        # ROI相关变量
+        self.roi_mode = None
+        self.roi_rects = []
+        self.current_roi = None
+        self.roi_start = None
+        self.roi_end = None
+        self.parent_controller = None
+        self.is_roi_dragging = False
+        self.active_roi = -1
+        
         # 确定视图类型
         if "Axial" in title:
             self.view_type = "axial"
@@ -225,9 +235,15 @@ class SliceViewer(QtWidgets.QWidget):
         self.active_angle_index = -1
         self.dragging_angle_point = None
         
-        # 确保对应线段和角度列表是空的
-        self.corresponding_lines = []
-        self.corresponding_angles = []
+        # 清除ROI相关状态
+        self.roi_mode = None
+        self.roi_rects = []
+        self.current_roi = None
+        self.roi_start = None
+        self.roi_end = None
+        self.parent_controller = None
+        self.is_roi_dragging = False
+        self.active_roi = -1
     
     def disable_measurement_mode(self):
         """禁用测量模式"""
@@ -250,7 +266,22 @@ class SliceViewer(QtWidgets.QWidget):
     def eventFilter(self, obj, event):
         """事件过滤器，处理鼠标事件"""
         if obj == self.view.viewport():
-            if self.measurement_mode == 'distance':
+            if self.roi_mode == 'selection':
+                # ... existing code ...
+                if event.type() == QtCore.QEvent.MouseButtonPress:
+                    if event.button() == QtCore.Qt.LeftButton:
+                        return self.handle_roi_mouse_press(event)
+                elif event.type() == QtCore.QEvent.MouseMove:
+                    buttons = event.buttons()
+                    if buttons & QtCore.Qt.LeftButton:
+                        return self.handle_roi_mouse_move(event)
+                    else:
+                        self.view.viewport().setCursor(QtCore.Qt.CrossCursor)
+                        return True
+                elif event.type() == QtCore.QEvent.MouseButtonRelease:
+                    if event.button() == QtCore.Qt.LeftButton:
+                        return self.handle_roi_mouse_release(event)
+            elif self.measurement_mode == 'distance':
                 if event.type() == QtCore.QEvent.MouseButtonPress:
                     if event.button() == QtCore.Qt.LeftButton:
                         return self.handle_mouse_press(event)
@@ -1788,3 +1819,222 @@ class SliceViewer(QtWidgets.QWidget):
         
         # 重绘测量线和角度
         self.redraw_measurement_lines()
+    
+    def enable_roi_mode(self, mode, parent_controller):
+        """启用ROI模式"""
+        self.roi_mode = mode
+        self.parent_controller = parent_controller
+        if hasattr(self, 'statusBar'):
+            self.statusBar().showMessage(f"ROI模式: {mode}")
+    
+    def disable_roi_mode(self):
+        """禁用ROI模式"""
+        self.roi_mode = None
+        self.parent_controller = None
+    
+    def setup_roi_variables(self):
+        """初始化ROI相关变量"""
+        self.roi_mode = None
+        self.roi_rects = []  # 存储该视图中的ROI矩形
+        self.current_roi = None  # 当前正在绘制的ROI
+        self.roi_start = None  # ROI绘制起点
+        self.roi_end = None  # ROI绘制终点
+        self.parent_controller = None  # 父控制器引用
+        self.is_roi_dragging = False  # 是否在拖动ROI
+        self.active_roi = -1  # 当前活动的ROI索引
+    
+    def handle_roi_mouse_press(self, event):
+        """处理ROI模式的鼠标按下事件"""
+        if self.roi_mode != 'selection':
+            return False
+        
+        # 检查是否已经在其他视图中选取了ROI
+        if self.parent_controller and hasattr(self.parent_controller, 'roi_selection_view'):
+            if self.parent_controller.roi_selection_view is not None:
+                # 已经在其他视图中选取了ROI，禁止在本视图继续选取
+                if self.parent_controller.roi_selection_view != self.view_type:
+                    print(f"禁止在{self.view_type}视图选取ROI，因为已经在{self.parent_controller.roi_selection_view}视图中选取")
+                    return False
+        
+        scene_pos = self.view.mapToScene(event.pos())
+        
+        # 检查是否点击在现有ROI上
+        for i, roi in enumerate(self.roi_rects):
+            if self.point_in_roi(scene_pos, roi):
+                self.active_roi = i
+                self.is_roi_dragging = True
+                return True
+        
+        # 在该视图中开始绘制新ROI
+        self.roi_start = scene_pos
+        self.roi_end = scene_pos
+        self.current_roi = {'start': scene_pos, 'end': scene_pos}
+        
+        # 记录在哪个视图中选取了ROI
+        if self.parent_controller and hasattr(self.parent_controller, 'roi_selection_view'):
+            self.parent_controller.roi_selection_view = self.view_type
+            print(f"在{self.view_type}视图中开始选取ROI")
+            
+            # 更新深度滑动条的范围和标签
+            if hasattr(self.parent_controller, 'update_depth_slider_for_view'):
+                self.parent_controller.update_depth_slider_for_view(self.view_type)
+        
+        self.redraw_roi()
+        return True
+    
+    def handle_roi_mouse_move(self, event):
+        """处理ROI模式的鼠标移动事件"""
+        if self.roi_mode != 'selection':
+            return False
+        
+        scene_pos = self.view.mapToScene(event.pos())
+        
+        if self.is_roi_dragging and hasattr(self, 'active_roi'):
+            # 拖动现有ROI
+            roi = self.roi_rects[self.active_roi]
+            dx = scene_pos.x() - self.roi_end.x()
+            dy = scene_pos.y() - self.roi_end.y()
+            
+            roi['rect'].translate(dx, dy)
+            self.roi_end = scene_pos
+            self.redraw_roi()
+            return True
+        
+        elif self.current_roi is not None:
+            # 正在绘制新ROI
+            self.roi_end = scene_pos
+            self.current_roi['end'] = scene_pos
+            self.redraw_roi()
+            
+            # 更新状态栏显示ROI大小
+            width = abs(self.roi_end.x() - self.roi_start.x())
+            height = abs(self.roi_end.y() - self.roi_start.y())
+            if hasattr(self, 'parent_controller') and self.parent_controller and hasattr(self.parent_controller, 'statusBar'):
+                self.parent_controller.statusBar().showMessage(f"ROI大小: {int(width)}x{int(height)}")
+            
+            return True
+        
+        return False
+    
+    def handle_roi_mouse_release(self, event):
+        """处理ROI模式的鼠标释放事件"""
+        if self.roi_mode != 'selection':
+            return False
+        
+        self.is_roi_dragging = False
+        
+        if self.current_roi is not None:
+            # 完成ROI绘制
+            start = self.current_roi['start']
+            end = self.current_roi['end']
+            
+            if abs(end.x() - start.x()) > 5 and abs(end.y() - start.y()) > 5:
+                # ROI有效（大小足够大）
+                # 创建矩形
+                x_min = min(start.x(), end.x())
+                x_max = max(start.x(), end.x())
+                y_min = min(start.y(), end.y())
+                y_max = max(start.y(), end.y())
+                
+                rect = QtCore.QRectF(x_min, y_min, x_max - x_min, y_max - y_min)
+                
+                roi_data = {
+                    'rect': rect,
+                    'slice_index': self.slider.value(),
+                    'view_type': self.view_type
+                }
+                
+                self.roi_rects.append(roi_data)
+                
+                # 通知父控制器
+                if hasattr(self, 'parent_controller') and self.parent_controller:
+                    self.parent_controller.add_roi_to_view(self.view_type, rect, self.slider.value())
+            
+            self.current_roi = None
+            self.roi_start = None
+            self.roi_end = None
+            self.redraw_roi()
+            return True
+        
+        return False
+    
+    def point_in_roi(self, point, roi):
+        """检查点是否在ROI内"""
+        rect = roi['rect']
+        return rect.contains(point)
+    
+    def redraw_roi(self):
+        """重绘所有ROI矩形"""
+        if hasattr(self, 'scene'):
+            # 只清除ROI相关的图形项（矩形和文本标签）
+            # 查找并删除所有ROI矩形和标签
+            items_to_remove = []
+            for item in self.scene.items():
+                # 跳过pixmap_item
+                if item == self.pixmap_item:
+                    continue
+                # 保留测量线段和角度标记（使用特定的颜色检查）
+                if isinstance(item, QtWidgets.QGraphicsLineItem):
+                    # 保留红色或蓝色的线段（测量线）
+                    pen_color = item.pen().color()
+                    if pen_color.red() in [255, 0] and pen_color.green() == 0:
+                        continue
+                if isinstance(item, QtWidgets.QGraphicsRectItem):
+                    # 保留不是我们绘制的ROI框（红蓝色的小点）
+                    pen_color = item.pen().color()
+                    if pen_color.red() in [255, 0] and pen_color.green() == 0:
+                        continue
+                # 删除绿色和黄色的项（ROI框和标签）
+                if isinstance(item, (QtWidgets.QGraphicsRectItem, QtWidgets.QGraphicsTextItem)):
+                    if isinstance(item, QtWidgets.QGraphicsTextItem):
+                        # 保留数字标签（距离、角度），删除ROI标签
+                        if "ROI-" in item.toPlainText():
+                            items_to_remove.append(item)
+                    else:
+                        items_to_remove.append(item)
+            
+            for item in items_to_remove:
+                self.scene.removeItem(item)
+            
+            # 绘制所有已保存的ROI
+            roi_pen = QtGui.QPen(QtGui.QColor(0, 255, 0))  # 绿色
+            roi_pen.setWidth(2)
+            roi_pen.setStyle(QtCore.Qt.SolidLine)
+            
+            for roi in self.roi_rects:
+                rect = roi['rect']
+                self.scene.addRect(rect, roi_pen)
+                
+                # 添加ROI标签
+                text = QtWidgets.QGraphicsTextItem(f"ROI-{roi.get('id', 0)}")
+                text.setPos(rect.x(), rect.y() - 15)
+                text.setDefaultTextColor(QtGui.QColor(0, 255, 0))
+                font = QtGui.QFont()
+                font.setBold(True)
+                text.setFont(font)
+                self.scene.addItem(text)
+            
+            # 绘制当前正在绘制的ROI
+            if self.current_roi is not None:
+                start = self.current_roi['start']
+                end = self.current_roi['end']
+                
+                x_min = min(start.x(), end.x())
+                x_max = max(start.x(), end.x())
+                y_min = min(start.y(), end.y())
+                y_max = max(start.y(), end.y())
+                
+                temp_pen = QtGui.QPen(QtGui.QColor(255, 255, 0))  # 黄色虚线
+                temp_pen.setWidth(1)
+                temp_pen.setStyle(QtCore.Qt.DashLine)
+                
+                temp_rect = QtCore.QRectF(x_min, y_min, x_max - x_min, y_max - y_min)
+                self.scene.addRect(temp_rect, temp_pen)
+    
+    def _array_to_pixmap(self, arr):
+        """将numpy数组转换为QPixmap"""
+        from File.DataTransform import array_to_qpixmap
+        
+        # array_to_qpixmap会自动进行归一化，无需传递窗宽窗位参数
+        pixmap = array_to_qpixmap(arr)
+        return pixmap

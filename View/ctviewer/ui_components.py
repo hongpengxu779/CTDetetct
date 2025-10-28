@@ -75,24 +75,27 @@ class UIComponents:
         }
         
         QPushButton {
-            background-color: #2196F3;
-            color: white;
-            border: none;
+            background-color: #E3F2FD;
+            color: #212121;
+            border: 1px solid #BBDEFB;
             border-radius: 4px;
             padding: 6px 16px;
             font-weight: 500;
         }
         
         QPushButton:hover {
-            background-color: #1976D2;
+            background-color: #BBDEFB;
+            color: #000000;
         }
         
         QPushButton:pressed {
-            background-color: #0D47A1;
+            background-color: #90CAF9;
+            color: #000000;
         }
         
         QPushButton:disabled {
-            background-color: #BDBDBD;
+            background-color: #F5F5F5;
+            color: #9E9E9E;
         }
         
         QSlider::groove:horizontal {
@@ -303,6 +306,106 @@ class UIComponents:
         toolbar_layout.addWidget(ww_wl_group)
         toolbar_layout.addStretch()
         
+        # 创建ROI分组框
+        roi_group = QtWidgets.QGroupBox("ROI工具")
+        roi_group.setStyleSheet("QGroupBox { font-weight: bold; padding-top: 10px; }")
+        roi_group_layout = QtWidgets.QVBoxLayout(roi_group)
+        roi_group_layout.setSpacing(8)
+        
+        # 说明文本
+        roi_info_label = QtWidgets.QLabel("在Axial视图中绘制ROI，\n用下方滑动条控制Z范围")
+        roi_info_label.setStyleSheet("QLabel { font-weight: normal; font-size: 10pt; color: #666; }")
+        roi_group_layout.addWidget(roi_info_label)
+        
+        # 选取ROI按钮
+        roi_select_btn = QtWidgets.QPushButton("选取ROI")
+        roi_select_btn.setStyleSheet("QPushButton { font-weight: normal; padding: 8px; }")
+        roi_select_btn.clicked.connect(self.roi_selection_start)
+        roi_group_layout.addWidget(roi_select_btn)
+        
+        # 清除ROI按钮
+        roi_clear_btn = QtWidgets.QPushButton("清除ROI")
+        roi_clear_btn.setStyleSheet("QPushButton { font-weight: normal; padding: 8px; }")
+        roi_clear_btn.clicked.connect(self.roi_selection_clear)
+        roi_group_layout.addWidget(roi_clear_btn)
+        
+        # 动态深度范围控制（根据选取的视图动态改变含义）
+        roi_group_layout.addSpacing(5)
+        depth_range_label = QtWidgets.QLabel("深度范围:")
+        depth_range_label.setStyleSheet("QLabel { font-weight: bold; font-size: 10pt; color: #0066cc; }")
+        roi_group_layout.addWidget(depth_range_label)
+        
+        # 深度标签（会动态改变，显示当前是Z/X/Y）
+        self.roi_depth_label = QtWidgets.QLabel("（等待选取ROI）")
+        self.roi_depth_label.setStyleSheet("QLabel { font-weight: normal; font-style: italic; color: #666666; }")
+        roi_group_layout.addWidget(self.roi_depth_label)
+        
+        # 深度最小值滑动条
+        depth_min_layout = QtWidgets.QHBoxLayout()
+        depth_min_text = QtWidgets.QLabel("Min:")
+        depth_min_text.setStyleSheet("QLabel { font-weight: normal; }")
+        depth_min_layout.addWidget(depth_min_text)
+        
+        self.roi_depth_min_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.roi_depth_min_slider.setMinimum(0)
+        self.roi_depth_min_slider.setMaximum(1000)
+        self.roi_depth_min_slider.setValue(0)
+        self.roi_depth_min_slider.setToolTip("深度最小值")
+        depth_min_layout.addWidget(self.roi_depth_min_slider)
+        
+        self.roi_depth_min_value = QtWidgets.QLabel("0")
+        self.roi_depth_min_value.setAlignment(QtCore.Qt.AlignCenter)
+        self.roi_depth_min_value.setStyleSheet("QLabel { font-weight: normal; background-color: #e6f2ff; padding: 2px; border: 1px solid #99ccff; border-radius: 3px; min-width: 40px; }")
+        self.roi_depth_min_slider.valueChanged.connect(lambda v: self.roi_depth_min_value.setText(str(v)))
+        depth_min_layout.addWidget(self.roi_depth_min_value)
+        
+        roi_group_layout.addLayout(depth_min_layout)
+        
+        # 深度最大值滑动条
+        depth_max_layout = QtWidgets.QHBoxLayout()
+        depth_max_text = QtWidgets.QLabel("Max:")
+        depth_max_text.setStyleSheet("QLabel { font-weight: normal; }")
+        depth_max_layout.addWidget(depth_max_text)
+        
+        self.roi_depth_max_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.roi_depth_max_slider.setMinimum(0)
+        self.roi_depth_max_slider.setMaximum(1000)
+        self.roi_depth_max_slider.setValue(100)
+        self.roi_depth_max_slider.setToolTip("深度最大值")
+        depth_max_layout.addWidget(self.roi_depth_max_slider)
+        
+        self.roi_depth_max_value = QtWidgets.QLabel("100")
+        self.roi_depth_max_value.setAlignment(QtCore.Qt.AlignCenter)
+        self.roi_depth_max_value.setStyleSheet("QLabel { font-weight: normal; background-color: #e6f2ff; padding: 2px; border: 1px solid #99ccff; border-radius: 3px; min-width: 40px; }")
+        self.roi_depth_max_slider.valueChanged.connect(lambda v: self.roi_depth_max_value.setText(str(v)))
+        depth_max_layout.addWidget(self.roi_depth_max_value)
+        
+        roi_group_layout.addLayout(depth_max_layout)
+        
+        # 3D预览按钮
+        roi_3d_btn = QtWidgets.QPushButton("3D预览")
+        roi_3d_btn.setStyleSheet("QPushButton { font-weight: normal; padding: 8px; }")
+        roi_3d_btn.clicked.connect(self.preview_roi_3d)
+        roi_group_layout.addWidget(roi_3d_btn)
+        
+        # 导出/导入按钮
+        roi_io_layout = QtWidgets.QHBoxLayout()
+        
+        roi_export_btn = QtWidgets.QPushButton("导出")
+        roi_export_btn.setStyleSheet("QPushButton { font-weight: normal; padding: 6px; }")
+        roi_export_btn.clicked.connect(self.on_export_roi)
+        roi_io_layout.addWidget(roi_export_btn)
+        
+        roi_import_btn = QtWidgets.QPushButton("导入")
+        roi_import_btn.setStyleSheet("QPushButton { font-weight: normal; padding: 6px; }")
+        roi_import_btn.clicked.connect(self.on_import_roi)
+        roi_io_layout.addWidget(roi_import_btn)
+        
+        roi_group_layout.addLayout(roi_io_layout)
+        
+        # 将ROI分组框添加到工具栏
+        toolbar_layout.insertWidget(1, roi_group)
+        
         # 将左侧工具栏添加到主分割器
         main_splitter.addWidget(self.left_toolbar)
         
@@ -443,4 +546,22 @@ class UIComponents:
         view3d_placeholder.setAlignment(QtCore.Qt.AlignCenter)
         view3d_placeholder.setStyleSheet(placeholder_style)
         self.grid_layout.addWidget(view3d_placeholder, 1, 1)
+    
+    def on_export_roi(self):
+        """处理ROI导出"""
+        filepath, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "导出ROI信息", "", "ROI文件 (*.roi.json)"
+        )
+        if filepath:
+            if not filepath.endswith('.roi.json'):
+                filepath += '.roi.json'
+            self.export_roi_info(filepath)
+    
+    def on_import_roi(self):
+        """处理ROI导入"""
+        filepath, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "导入ROI信息", "", "ROI文件 (*.roi.json)"
+        )
+        if filepath:
+            self.import_roi_info(filepath)
 

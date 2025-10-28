@@ -13,10 +13,12 @@ from .filter_operations import FilterOperations
 from .ct_operations import CTOperations
 from .ai_operations import AIOperations
 from .measurement_operations import MeasurementOperations
+from .roi_operations import ROIOperations
 
 
 class CTViewer4(QtWidgets.QMainWindow, UIComponents, WindowLevelControl, 
-                DataLoader, FilterOperations, CTOperations, AIOperations, MeasurementOperations):
+                DataLoader, FilterOperations, CTOperations, AIOperations, 
+                MeasurementOperations, ROIOperations):
     """
     四宫格 CT 浏览器：
     - 左上：Axial（横断面）切片 + 滑动条
@@ -61,6 +63,9 @@ class CTViewer4(QtWidgets.QMainWindow, UIComponents, WindowLevelControl,
         
         # 初始化测量功能
         self.setup_measurement()
+
+        # 初始化 ROI 功能
+        self.setup_roi()
         
         # 如果提供了文件名，则加载数据
         if filename:
