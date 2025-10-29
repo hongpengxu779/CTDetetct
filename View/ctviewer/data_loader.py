@@ -184,14 +184,17 @@ class DataLoader:
             else:
                 # 灰度图像的切片获取
                 self.axial_viewer = SliceViewer("Axial",
-                                          lambda z: self.array[z, :, :],
-                                          self.depth_z)
+                                          lambda z: self.apply_window_level_to_slice(self.array[z, :, :]),
+                                          self.depth_z,
+                                          parent_viewer=self)
                 self.sag_viewer = SliceViewer("Sagittal",
-                                        lambda x: self.array[:, :, x],
-                                        self.depth_x)
+                                        lambda x: self.apply_window_level_to_slice(self.array[:, :, x]),
+                                        self.depth_x,
+                                        parent_viewer=self)
                 self.cor_viewer = SliceViewer("Coronal",
-                                        lambda y: self.array[:, y, :],
-                                        self.depth_y)
+                                        lambda y: self.apply_window_level_to_slice(self.array[:, y, :]),
+                                        self.depth_y,
+                                        parent_viewer=self)
             
             # 更新ROI Z范围滑动条
             if hasattr(self, 'roi_z_min_slider'):
@@ -243,6 +246,10 @@ class DataLoader:
             # 更新显示
             self.setWindowTitle(f"CT Viewer - {os.path.basename(filename)}")
             
+            # 初始化窗宽窗位
+            if hasattr(self, 'reset_window_level'):
+                self.reset_window_level()
+            
             # 更新灰度直方图
             if hasattr(self, 'update_histogram'):
                 self.update_histogram(self.array)
@@ -273,14 +280,17 @@ class DataLoader:
         
         # 重新创建视图组件
         self.axial_viewer = SliceViewer("Axial",
-                                  lambda z: self.array[z, :, :],
-                                  self.depth_z)
+                                  lambda z: self.apply_window_level_to_slice(self.array[z, :, :]),
+                                  self.depth_z,
+                                  parent_viewer=self)
         self.sag_viewer = SliceViewer("Sagittal",
-                                lambda x: self.array[:, :, x],
-                                self.depth_x)
+                                lambda x: self.apply_window_level_to_slice(self.array[:, :, x]),
+                                self.depth_x,
+                                parent_viewer=self)
         self.cor_viewer = SliceViewer("Coronal",
-                                lambda y: self.array[:, y, :],
-                                self.depth_y)
+                                lambda y: self.apply_window_level_to_slice(self.array[:, y, :]),
+                                self.depth_y,
+                                parent_viewer=self)
         
         # 创建简化版3D体渲染视图（禁用降采样）
         self.volume_viewer = VolumeViewer(self.array, self.spacing, simplified=True, downsample_factor=1)
@@ -355,20 +365,23 @@ class DataLoader:
             
             # 重新创建视图组件
             self.axial_viewer = SliceViewer("Axial",
-                                      lambda z: self.array[z, :, :],
-                                      self.depth_z)
+                                      lambda z: self.apply_window_level_to_slice(self.array[z, :, :]),
+                                      self.depth_z,
+                                      parent_viewer=self)
             progress.setValue(1)
             QtWidgets.QApplication.processEvents()
             
             self.sag_viewer = SliceViewer("Sagittal",
-                                    lambda x: self.array[:, :, x],
-                                    self.depth_x)
+                                    lambda x: self.apply_window_level_to_slice(self.array[:, :, x]),
+                                    self.depth_x,
+                                    parent_viewer=self)
             progress.setValue(2)
             QtWidgets.QApplication.processEvents()
             
             self.cor_viewer = SliceViewer("Coronal",
-                                    lambda y: self.array[:, y, :],
-                                    self.depth_y)
+                                    lambda y: self.apply_window_level_to_slice(self.array[:, y, :]),
+                                    self.depth_y,
+                                    parent_viewer=self)
             progress.setValue(3)
             QtWidgets.QApplication.processEvents()
             

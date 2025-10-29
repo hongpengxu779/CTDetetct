@@ -236,7 +236,7 @@ class UIComponents:
         config_menu = self.menu_bar.addMenu("配准")
         
         # 测量菜单
-        measure_menu = self.menu_bar.addMenu("测量")
+        measure_menu = self.menu_bar.addMenu("人工标记与测量")
         distance_action = QtWidgets.QAction("距离", self)
         distance_action.triggered.connect(self.measure_distance)
         measure_menu.addAction(distance_action)
@@ -321,15 +321,15 @@ class UIComponents:
         toolbar_layout.addStretch()
         
         # 创建ROI分组框
-        roi_group = QtWidgets.QGroupBox("ROI工具")
+        roi_group = QtWidgets.QGroupBox("3D ROI")
         roi_group.setStyleSheet("QGroupBox { font-weight: bold; padding-top: 10px; }")
         roi_group_layout = QtWidgets.QVBoxLayout(roi_group)
         roi_group_layout.setSpacing(8)
         
         # 说明文本
-        roi_info_label = QtWidgets.QLabel("在Axial视图中绘制ROI，\n用下方滑动条控制Z范围")
-        roi_info_label.setStyleSheet("QLabel { font-weight: normal; font-size: 10pt; color: #666; }")
-        roi_group_layout.addWidget(roi_info_label)
+        # roi_info_label = QtWidgets.QLabel("在Axial视图中绘制ROI，\n用下方滑动条控制Z范围")
+        # roi_info_label.setStyleSheet("QLabel { font-weight: normal; font-size: 10pt; color: #666; }")
+        # roi_group_layout.addWidget(roi_info_label)
         
         # 选取ROI按钮
         roi_select_btn = QtWidgets.QPushButton("选取ROI")
@@ -526,13 +526,26 @@ class UIComponents:
                               transform=self.histogram_ax.transAxes,
                               ha='center', va='center',
                               fontsize=10, color='#999999')
-        self.histogram_ax.tick_params(labelsize=8, colors='#666666')
         
-        # 设置坐标轴颜色为浅色主题
-        self.histogram_ax.spines['bottom'].set_color('#cccccc')
-        self.histogram_ax.spines['left'].set_color('#cccccc')
+        # 隐藏所有坐标轴和刻度
+        self.histogram_ax.set_xticks([])
+        self.histogram_ax.set_yticks([])
+        self.histogram_ax.spines['bottom'].set_visible(False)
+        self.histogram_ax.spines['left'].set_visible(False)
         self.histogram_ax.spines['top'].set_visible(False)
         self.histogram_ax.spines['right'].set_visible(False)
+        
+        # 初始化可拖动的垂直线
+        self.histogram_left_line = None
+        self.histogram_right_line = None
+        self.histogram_dragging_line = None
+        self.histogram_data_range = (0, 65535)  # 数据范围
+        self.histogram_temp_label = None  # 临时标签引用
+        
+        # 连接鼠标事件
+        self.histogram_canvas.mpl_connect('button_press_event', self.on_histogram_mouse_press)
+        self.histogram_canvas.mpl_connect('button_release_event', self.on_histogram_mouse_release)
+        self.histogram_canvas.mpl_connect('motion_notify_event', self.on_histogram_mouse_move)
         
         self.histogram_canvas.draw()
         
@@ -556,6 +569,24 @@ class UIComponents:
         
         # 使用QMainWindow的setCentralWidget方法设置中心部件
         self.setCentralWidget(main_splitter)
+        
+        # 创建状态栏
+        self.status_bar = self.statusBar()
+        self.status_bar.setStyleSheet("""
+            QStatusBar {
+                background-color: #f0f0f0;
+                border-top: 1px solid #d0d0d0;
+                padding: 4px;
+            }
+            QStatusBar::item {
+                border: none;
+            }
+        """)
+        
+        # 创建状态栏标签
+        self.status_label = QtWidgets.QLabel("准备就绪")
+        self.status_label.setStyleSheet("color: #424242; padding: 0 10px;")
+        self.status_bar.addWidget(self.status_label, 1)  # stretch factor = 1
         
         # 初始时显示空白占位符
         self.axial_viewer = None
@@ -628,7 +659,7 @@ class UIComponents:
     
     def update_histogram(self, data_array):
         """
-        更新灰度直方图显示 - VGStudio风格
+        更新灰度直方图显示 - 带可拖动线段
         
         参数
         ----
@@ -644,6 +675,9 @@ class UIComponents:
             # 清除之前的直方图
             self.histogram_ax.clear()
             
+            # 清除临时标签
+            self.histogram_temp_label = None
+            
             # 对于大数据集，使用采样以加快计算
             if data_array.size > 1e7:  # 如果数据量大于1000万像素
                 # 随机采样10%的数据
@@ -657,6 +691,11 @@ class UIComponents:
             # 计算直方图（使用256个bins）
             hist_values, bin_edges = np.histogram(sampled_data, bins=256)
             bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+            
+            # 保存数据范围
+            data_min = float(sampled_data.min())
+            data_max = float(sampled_data.max())
+            self.histogram_data_range = (data_min, data_max)
             
             # VGStudio风格：使用灰度渐变填充
             # 创建灰度渐变colormap - 从深灰到浅灰
@@ -678,36 +717,41 @@ class UIComponents:
             self.histogram_ax.set_facecolor('white')
             self.histogram_figure.patch.set_facecolor('#f5f5f5')
             
-            # 不显示坐标轴标签
-            self.histogram_ax.set_xlabel('')
-            self.histogram_ax.set_ylabel('')
-            self.histogram_ax.tick_params(labelsize=8, colors='#666666')
-            
-            # 设置坐标轴样式 - 浅色主题
-            self.histogram_ax.spines['bottom'].set_color('#cccccc')
-            self.histogram_ax.spines['left'].set_color('#cccccc')
+            # 隐藏所有坐标轴和刻度
+            self.histogram_ax.set_xticks([])
+            self.histogram_ax.set_yticks([])
+            self.histogram_ax.spines['bottom'].set_visible(False)
+            self.histogram_ax.spines['left'].set_visible(False)
             self.histogram_ax.spines['top'].set_visible(False)
             self.histogram_ax.spines['right'].set_visible(False)
             
-            # 添加统计信息 - 浅色主题版本
-            data_min = float(sampled_data.min())
-            data_max = float(sampled_data.max())
+            # 设置坐标轴范围
+            self.histogram_ax.set_xlim(data_min, data_max)
+            y_max = hist_values.max() * 1.1
+            self.histogram_ax.set_ylim(0, y_max)
+            
+            # 保存直方图数据用于查询
+            self.histogram_bin_centers = bin_centers
+            self.histogram_values = hist_values
+            
+            # 添加可拖动的垂直线（默认在25%和75%位置）
+            line_left_pos = data_min + (data_max - data_min) * 0.25
+            line_right_pos = data_min + (data_max - data_min) * 0.75
+            
+            # 左线使用蓝色，右线使用红色
+            self.histogram_left_line = self.histogram_ax.axvline(
+                line_left_pos, color='blue', linewidth=2, linestyle='-', alpha=0.8
+            )
+            self.histogram_right_line = self.histogram_ax.axvline(
+                line_right_pos, color='red', linewidth=2, linestyle='-', alpha=0.8
+            )
+            
+            # 计算统计信息并更新到状态栏
             data_mean = float(sampled_data.mean())
             data_std = float(sampled_data.std())
             
-            stats_text = f'最小值: {data_min:.0f}\n最大值: {data_max:.0f}\n平均值: {data_mean:.1f}\n标准差: {data_std:.1f}'
-            
-            self.histogram_ax.text(0.98, 0.97, stats_text, 
-                                  transform=self.histogram_ax.transAxes,
-                                  verticalalignment='top', 
-                                  horizontalalignment='right',
-                                  fontsize=7.5,
-                                  color='#424242',
-                                  bbox=dict(boxstyle='round,pad=0.5', 
-                                           facecolor='white', 
-                                           edgecolor='#d0d0d0',
-                                           alpha=0.9,
-                                           linewidth=1))
+            # 更新状态栏信息
+            self._update_status_bar(data_min, data_max, data_mean, data_std)
             
             # 调整布局让图表填充满整个区域
             self.histogram_figure.tight_layout(pad=0.5)
@@ -719,4 +763,152 @@ class UIComponents:
             print(f"更新直方图时出错: {str(e)}")
             import traceback
             traceback.print_exc()
+    
+    def _get_histogram_value_at_position(self, x_pos):
+        """
+        获取指定X位置（灰度值）对应的直方图Y值（像素个数）
+        
+        参数
+        ----
+        x_pos : float
+            X轴位置（灰度值）
+        
+        返回
+        ----
+        float : 对应的像素个数，如果找不到则返回0
+        """
+        if not hasattr(self, 'histogram_bin_centers') or not hasattr(self, 'histogram_values'):
+            return 0
+        
+        # 找到最接近的bin
+        distances = np.abs(self.histogram_bin_centers - x_pos)
+        closest_idx = np.argmin(distances)
+        
+        return float(self.histogram_values[closest_idx])
+    
+    def on_histogram_mouse_press(self, event):
+        """处理直方图的鼠标按下事件"""
+        if event.inaxes != self.histogram_ax or event.xdata is None:
+            return
+        
+        # 检查是否点击在某条线附近（容差5个数据单位）
+        tolerance = (self.histogram_data_range[1] - self.histogram_data_range[0]) * 0.02
+        
+        if self.histogram_left_line:
+            left_pos = self.histogram_left_line.get_xdata()[0]
+            if abs(event.xdata - left_pos) < tolerance:
+                self.histogram_dragging_line = 'left'
+                return
+        
+        if self.histogram_right_line:
+            right_pos = self.histogram_right_line.get_xdata()[0]
+            if abs(event.xdata - right_pos) < tolerance:
+                self.histogram_dragging_line = 'right'
+                return
+    
+    def on_histogram_mouse_release(self, event):
+        """处理直方图的鼠标释放事件"""
+        if self.histogram_dragging_line:
+            self.histogram_dragging_line = None
+            # 重绘以清除临时标签
+            self._redraw_histogram_lines()
+    
+    def on_histogram_mouse_move(self, event):
+        """处理直方图的鼠标移动事件"""
+        if event.inaxes != self.histogram_ax or event.xdata is None:
+            return
+        
+        # 如果正在拖动线段
+        if self.histogram_dragging_line:
+            data_min, data_max = self.histogram_data_range
+            new_pos = max(data_min, min(data_max, event.xdata))
+            
+            # 清除所有临时文本标签
+            self._clear_histogram_temp_labels()
+            
+            if self.histogram_dragging_line == 'left' and self.histogram_left_line:
+                # 确保左线不会超过右线
+                if self.histogram_right_line:
+                    right_pos = self.histogram_right_line.get_xdata()[0]
+                    new_pos = min(new_pos, right_pos)
+                
+                self.histogram_left_line.set_xdata([new_pos, new_pos])
+                
+                # 获取当前灰度值位置对应的像素个数
+                pixel_count = self._get_histogram_value_at_position(new_pos)
+                
+                # 显示 [像素个数, 像素值] - 蓝色边框，黑色文字
+                label_text = f'[{pixel_count:.0f}, {new_pos:.0f}]'
+                y_max = self.histogram_ax.get_ylim()[1]
+                # 保存临时标签的引用
+                self.histogram_temp_label = self.histogram_ax.text(
+                    new_pos, y_max * 0.95, label_text,
+                    ha='center', va='top',
+                    fontsize=8, color='black',
+                    bbox=dict(boxstyle='round,pad=0.3',
+                             facecolor='white',
+                             edgecolor='blue',
+                             alpha=0.9))
+            
+            elif self.histogram_dragging_line == 'right' and self.histogram_right_line:
+                # 确保右线不会超过左线
+                if self.histogram_left_line:
+                    left_pos = self.histogram_left_line.get_xdata()[0]
+                    new_pos = max(new_pos, left_pos)
+                
+                self.histogram_right_line.set_xdata([new_pos, new_pos])
+                
+                # 获取当前灰度值位置对应的像素个数
+                pixel_count = self._get_histogram_value_at_position(new_pos)
+                
+                # 显示 [像素个数, 像素值] - 红色边框，黑色文字
+                label_text = f'[{pixel_count:.0f}, {new_pos:.0f}]'
+                y_max = self.histogram_ax.get_ylim()[1]
+                # 保存临时标签的引用
+                self.histogram_temp_label = self.histogram_ax.text(
+                    new_pos, y_max * 0.95, label_text,
+                    ha='center', va='top',
+                    fontsize=8, color='black',
+                    bbox=dict(boxstyle='round,pad=0.3',
+                             facecolor='white',
+                             edgecolor='red',
+                             alpha=0.9))
+            
+            # 使用blit加速重绘
+            self.histogram_canvas.draw_idle()
+    
+    def _clear_histogram_temp_labels(self):
+        """清除直方图上的所有临时标签"""
+        # 如果有保存的临时标签引用，直接移除
+        if hasattr(self, 'histogram_temp_label') and self.histogram_temp_label:
+            try:
+                self.histogram_temp_label.remove()
+            except:
+                pass
+            self.histogram_temp_label = None
+    
+    def _redraw_histogram_lines(self):
+        """重新绘制直方图的垂直线（不包括临时标签）"""
+        # 清除所有临时标签
+        self._clear_histogram_temp_labels()
+        self.histogram_canvas.draw()
+    
+    def _update_status_bar(self, data_min, data_max, data_mean, data_std):
+        """
+        更新状态栏显示统计信息
+        
+        参数
+        ----
+        data_min : float
+            数据最小值
+        data_max : float
+            数据最大值
+        data_mean : float
+            数据平均值
+        data_std : float
+            数据标准差
+        """
+        if hasattr(self, 'status_label'):
+            stats_text = f"最小值: {data_min:.0f}  |  最大值: {data_max:.0f}  |  平均值: {data_mean:.1f}  |  标准差: {data_std:.1f}"
+            self.status_label.setText(stats_text)
 
