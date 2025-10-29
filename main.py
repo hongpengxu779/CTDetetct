@@ -8,7 +8,6 @@ import numpy as np
 from View.View import *
 
 
-
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
 

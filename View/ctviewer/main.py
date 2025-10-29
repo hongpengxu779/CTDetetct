@@ -14,11 +14,12 @@ from .ct_operations import CTOperations
 from .ai_operations import AIOperations
 from .measurement_operations import MeasurementOperations
 from .roi_operations import ROIOperations
+from Traditional.Segmentation.traditional_segmentation_operations import TraditionalSegmentationOperations
 
 
 class CTViewer4(QtWidgets.QMainWindow, UIComponents, WindowLevelControl, 
                 DataLoader, FilterOperations, CTOperations, AIOperations, 
-                MeasurementOperations, ROIOperations):
+                MeasurementOperations, ROIOperations, TraditionalSegmentationOperations):
     """
     四宫格 CT 浏览器：
     - 左上：Axial（横断面）切片 + 滑动条
@@ -30,6 +31,7 @@ class CTViewer4(QtWidgets.QMainWindow, UIComponents, WindowLevelControl,
     - 文件操作：导入文件
     - 滤波：各向异性平滑、曲率流去噪
     - CT重建：多球标定、CT螺旋重建、CT圆轨迹
+    - 传统分割检测：区域生长、OTSU阈值分割
     - 人工智能分割：基线方法
     - 配准（占位）
     """
@@ -66,6 +68,12 @@ class CTViewer4(QtWidgets.QMainWindow, UIComponents, WindowLevelControl,
 
         # 初始化 ROI 功能
         self.setup_roi()
+        
+        # 初始化传统分割功能
+        TraditionalSegmentationOperations.__init__(self)
+        
+        # 初始化分割结果标志
+        self.is_segmentation = False
         
         # 如果提供了文件名，则加载数据
         if filename:

@@ -116,6 +116,9 @@ class DataLoader:
                 print(f"数据尺寸: Z={temp_depth_z}, Y={temp_depth_y}, X={temp_depth_x}")
                 print(f"Spacing: {temp_spacing}")
                 
+                # RGB图像不是分割结果
+                is_segmentation = False
+                
                 # 为了3D显示，将RGB转换为灰度
                 if temp_rgb_array.shape[3] >= 3:
                     gray = (0.299 * temp_rgb_array[:,:,:,0] + 
@@ -131,10 +134,29 @@ class DataLoader:
                 # 非RGB图像，保持原有逻辑
                 temp_rgb_array = None
                 
+                # 在转换之前检测是否为分割结果
+                # 分割结果的特征：
+                # 1. 数据类型为uint8
+                # 2. 数据范围较小（通常0-255或更小）
+                # 3. 数据值只有少数几个离散值
+                is_segmentation = False
+                if temp_array.dtype == np.uint8:
+                    # 检查唯一值数量
+                    unique_values = np.unique(temp_array)
+                    if len(unique_values) <= 20:  # 少于20个唯一值，可能是分割结果
+                        is_segmentation = True
+                        print(f"检测到分割结果，唯一值: {unique_values}")
+                
                 if temp_array.dtype == np.uint8:
                     # 将uint8转换为uint16，扩展到完整范围
-                    print("检测到uint8数据，转换为uint16以便3D显示")
-                    temp_array = (temp_array.astype(np.float32) * 257).astype(np.uint16)
+                    if not is_segmentation:
+                        # 普通uint8图像，扩展到完整范围
+                        print("检测到uint8数据，转换为uint16以便3D显示")
+                        temp_array = (temp_array.astype(np.float32) * 257).astype(np.uint16)
+                    else:
+                        # 分割结果，保持原始值但转换类型
+                        print("检测到分割结果（uint8），转换为uint16但保持原始值")
+                        temp_array = temp_array.astype(np.uint16)
                 elif temp_array.dtype != np.uint16:
                     # 其他类型也转换为uint16
                     print(f"转换数据类型 {temp_array.dtype} -> uint16")
@@ -162,6 +184,8 @@ class DataLoader:
                     "2. 模型权重是否匹配\n"
                     "3. 分割阈值是否需要调整"
                 )
+                if not is_rgb:  # 只有非RGB图像才标记为分割结果
+                    is_segmentation = True
             
             # 创建数据项保存所有信息
             data_item = {
@@ -169,7 +193,8 @@ class DataLoader:
                 'array': temp_array,
                 'shape': (temp_depth_z, temp_depth_y, temp_depth_x),
                 'spacing': temp_spacing,
-                'rgb_array': temp_rgb_array
+                'rgb_array': temp_rgb_array,
+                'is_segmentation': is_segmentation  # 添加分割结果标志
             }
             
             # 生成数据名称
@@ -187,7 +212,10 @@ class DataLoader:
             self.spacing = temp_spacing
             self.rgb_array = temp_rgb_array
             self.raw_array = temp_array
+            self.is_segmentation = is_segmentation  # 保存分割结果标志
             print(f"raw_array已设置，形状: {self.raw_array.shape}")
+            if is_segmentation:
+                print("✓ 检测到分割结果，将不应用窗宽窗位")
             
             # 清除旧的视图组件
             self.clear_viewers()
@@ -206,18 +234,34 @@ class DataLoader:
                                         self.depth_y)
             else:
                 # 灰度图像的切片获取
-                self.axial_viewer = SliceViewer("Axial",
-                                          lambda z: self.apply_window_level_to_slice(self.array[z, :, :]),
-                                          self.depth_z,
-                                          parent_viewer=self)
-                self.sag_viewer = SliceViewer("Sagittal",
-                                        lambda x: self.apply_window_level_to_slice(self.array[:, :, x]),
-                                        self.depth_x,
-                                        parent_viewer=self)
-                self.cor_viewer = SliceViewer("Coronal",
-                                        lambda y: self.apply_window_level_to_slice(self.array[:, y, :]),
-                                        self.depth_y,
-                                        parent_viewer=self)
+                # 如果是分割结果，使用优化的显示映射而不是窗宽窗位
+                if is_segmentation:
+                    print("创建分割结果视图（使用优化的显示映射）")
+                    self.axial_viewer = SliceViewer("Axial (分割)",
+                                              lambda z: self.apply_segmentation_display(self.array[z, :, :]),
+                                              self.depth_z,
+                                              parent_viewer=self)
+                    self.sag_viewer = SliceViewer("Sagittal (分割)",
+                                            lambda x: self.apply_segmentation_display(self.array[:, :, x]),
+                                            self.depth_x,
+                                            parent_viewer=self)
+                    self.cor_viewer = SliceViewer("Coronal (分割)",
+                                            lambda y: self.apply_segmentation_display(self.array[:, y, :]),
+                                            self.depth_y,
+                                            parent_viewer=self)
+                else:
+                    self.axial_viewer = SliceViewer("Axial",
+                                              lambda z: self.apply_window_level_to_slice(self.array[z, :, :]),
+                                              self.depth_z,
+                                              parent_viewer=self)
+                    self.sag_viewer = SliceViewer("Sagittal",
+                                            lambda x: self.apply_window_level_to_slice(self.array[:, :, x]),
+                                            self.depth_x,
+                                            parent_viewer=self)
+                    self.cor_viewer = SliceViewer("Coronal",
+                                            lambda y: self.apply_window_level_to_slice(self.array[:, y, :]),
+                                            self.depth_y,
+                                            parent_viewer=self)
             
             # 更新ROI Z范围滑动条
             if hasattr(self, 'roi_z_min_slider'):
@@ -272,6 +316,15 @@ class DataLoader:
             # 初始化窗宽窗位
             if hasattr(self, 'reset_window_level'):
                 self.reset_window_level()
+                
+                # 如果是小范围的分割结果（如OTSU多阈值），自动调整窗宽窗位以便可见
+                if data_max < 2000 and data_max > 0:  # 判断是否为分割结果
+                    print(f"检测到分割结果（范围{data_min}-{data_max}），自动调整窗宽窗位以便可见")
+                    self.window_width = int(data_max * 1.2)  # 稍微扩大一点范围
+                    self.window_level = int(data_max / 2)
+                    self.ww_slider.setValue(self.window_width)
+                    self.wl_slider.setValue(self.window_level)
+                    self.update_all_views()
             
             # 更新灰度直方图
             if hasattr(self, 'update_histogram'):

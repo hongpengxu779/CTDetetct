@@ -227,6 +227,16 @@ class UIComponents:
         circle_ct_action.triggered.connect(self.run_circle_ct_reconstruction)
         ct_menu.addAction(circle_ct_action)
         
+        # 传统分割检测菜单
+        traditional_seg_menu = self.menu_bar.addMenu("传统分割检测")
+        region_growing_action = QtWidgets.QAction("区域生长", self)
+        region_growing_action.triggered.connect(self.run_region_growing)
+        traditional_seg_menu.addAction(region_growing_action)
+        
+        otsu_action = QtWidgets.QAction("OTSU阈值分割", self)
+        otsu_action.triggered.connect(self.run_otsu_segmentation)
+        traditional_seg_menu.addAction(otsu_action)
+        
         # 人工智能分割菜单
         ai_menu = self.menu_bar.addMenu("人工智能分割")
         unet_action = QtWidgets.QAction("基线方法", self)
@@ -237,12 +247,12 @@ class UIComponents:
         config_menu = self.menu_bar.addMenu("配准")
         
         # 测量菜单
-        measure_menu = self.menu_bar.addMenu("人工标记与测量")
-        distance_action = QtWidgets.QAction("距离", self)
+        measure_menu = self.menu_bar.addMenu("人工标记测量")
+        distance_action = QtWidgets.QAction("线段距离", self)
         distance_action.triggered.connect(self.measure_distance)
         measure_menu.addAction(distance_action)
         
-        angle_action = QtWidgets.QAction("角度", self)
+        angle_action = QtWidgets.QAction("三点测角度", self)
         angle_action.triggered.connect(self.measure_angle)
         measure_menu.addAction(angle_action)
         
@@ -322,7 +332,7 @@ class UIComponents:
         toolbar_layout.addStretch()
         
         # 创建ROI分组框
-        roi_group = QtWidgets.QGroupBox("3D ROI")
+        roi_group = QtWidgets.QGroupBox("3D 感兴趣区域")
         roi_group.setStyleSheet("QGroupBox { font-weight: bold; padding-top: 10px; }")
         roi_group_layout = QtWidgets.QVBoxLayout(roi_group)
         roi_group_layout.setSpacing(8)
@@ -333,27 +343,27 @@ class UIComponents:
         # roi_group_layout.addWidget(roi_info_label)
         
         # 选取ROI按钮
-        roi_select_btn = QtWidgets.QPushButton("选取ROI")
+        roi_select_btn = QtWidgets.QPushButton("选取感兴趣区域")
         roi_select_btn.setStyleSheet("QPushButton { font-weight: normal; padding: 8px; }")
         roi_select_btn.clicked.connect(self.roi_selection_start)
         roi_group_layout.addWidget(roi_select_btn)
         
         # 清除ROI按钮
-        roi_clear_btn = QtWidgets.QPushButton("清除ROI")
+        roi_clear_btn = QtWidgets.QPushButton("清除感兴趣区域")
         roi_clear_btn.setStyleSheet("QPushButton { font-weight: normal; padding: 8px; }")
         roi_clear_btn.clicked.connect(self.roi_selection_clear)
         roi_group_layout.addWidget(roi_clear_btn)
         
         # 动态深度范围控制（根据选取的视图动态改变含义）
-        roi_group_layout.addSpacing(5)
-        depth_range_label = QtWidgets.QLabel("深度范围:")
-        depth_range_label.setStyleSheet("QLabel { font-weight: bold; font-size: 10pt; color: #0066cc; }")
-        roi_group_layout.addWidget(depth_range_label)
+        # roi_group_layout.addSpacing(5)
+        # depth_range_label = QtWidgets.QLabel("深度范围:")
+        # depth_range_label.setStyleSheet("QLabel { font-weight: bold; font-size: 10pt; color: #0066cc; }")
+        # roi_group_layout.addWidget(depth_range_label)
         
         # 深度标签（会动态改变，显示当前是Z/X/Y）
-        self.roi_depth_label = QtWidgets.QLabel("（等待选取ROI）")
-        self.roi_depth_label.setStyleSheet("QLabel { font-weight: normal; font-style: italic; color: #666666; }")
-        roi_group_layout.addWidget(self.roi_depth_label)
+        # self.roi_depth_label = QtWidgets.QLabel("（等待选取ROI）")
+        # self.roi_depth_label.setStyleSheet("QLabel { font-weight: normal; font-style: italic; color: #666666; }")
+        # roi_group_layout.addWidget(self.roi_depth_label)
         
         # 深度最小值滑动条
         depth_min_layout = QtWidgets.QHBoxLayout()
@@ -497,18 +507,18 @@ class UIComponents:
         data_list_layout.addWidget(self.data_list_widget)
         
         # 添加提示标签
-        data_hint_label = QtWidgets.QLabel("✓ 勾选的数据将显示在视图中")
-        data_hint_label.setStyleSheet("""
-            QLabel {
-                color: #666666;
-                font-size: 8pt;
-                background-color: transparent;
-                border: none;
-                padding: 2px;
-            }
-        """)
-        data_hint_label.setAlignment(QtCore.Qt.AlignCenter)
-        data_list_layout.addWidget(data_hint_label)
+        # data_hint_label = QtWidgets.QLabel("✓ 勾选的数据将显示在视图中")
+        # data_hint_label.setStyleSheet("""
+        #     QLabel {
+        #         color: #666666;
+        #         font-size: 8pt;
+        #         background-color: transparent;
+        #         border: none;
+        #         padding: 2px;
+        #     }
+        # """)
+        # data_hint_label.setAlignment(QtCore.Qt.AlignCenter)
+        # data_list_layout.addWidget(data_hint_label)
         
         # 添加按钮区域
         button_layout = QtWidgets.QHBoxLayout()
@@ -1175,6 +1185,17 @@ class UIComponents:
             # 初始化窗宽窗位
             if hasattr(self, 'reset_window_level'):
                 self.reset_window_level()
+                
+                # 如果是小范围的分割结果（如OTSU多阈值），自动调整窗宽窗位以便可见
+                data_max = float(self.array.max())
+                data_min = float(self.array.min())
+                if data_max < 2000 and data_max > 0:  # 判断是否为分割结果
+                    print(f"检测到分割结果（范围{data_min}-{data_max}），自动调整窗宽窗位以便可见")
+                    self.window_width = int(data_max * 1.2)  # 稍微扩大一点范围
+                    self.window_level = int(data_max / 2)
+                    self.ww_slider.setValue(self.window_width)
+                    self.wl_slider.setValue(self.window_level)
+                    self.update_all_views()
             
             # 更新灰度直方图
             if hasattr(self, 'update_histogram'):

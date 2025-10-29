@@ -59,6 +59,41 @@ class WindowLevelControl:
         
         return temp_slice.astype(np.uint16)
     
+    def apply_segmentation_display(self, slice_array):
+        """
+        为分割结果应用优化的显示映射
+        
+        分割结果通常值范围很小（如0-255），直接显示会很暗淡。
+        此函数将分割值映射到完整的显示范围，使其清晰可见。
+        
+        参数
+        ----
+        slice_array : np.ndarray
+            分割结果的切片数组
+            
+        返回
+        ----
+        np.ndarray
+            映射后的uint16数组，适合显示
+        """
+        if slice_array is None:
+            return slice_array
+        
+        # 获取当前切片的数据范围
+        slice_min = float(slice_array.min())
+        slice_max = float(slice_array.max())
+        
+        # 如果切片全为0或没有变化，直接返回
+        if slice_max - slice_min <= 0:
+            return slice_array.astype(np.uint16)
+        
+        # 将分割值映射到完整的uint16范围 [0, 65535]
+        # 这样可以确保分割结果清晰可见
+        temp_slice = slice_array.astype(np.float32)
+        temp_slice = (temp_slice - slice_min) / (slice_max - slice_min) * 65535.0
+        
+        return temp_slice.astype(np.uint16)
+    
     def apply_window_level_to_data(self):
         """将窗宽窗位应用到整个数据集（已弃用，保留以兼容旧代码）"""
         # 此方法已弃用，不再使用，以避免大数据集的内存问题

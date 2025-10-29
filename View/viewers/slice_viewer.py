@@ -409,8 +409,116 @@ class SliceViewer(QtWidgets.QWidget):
             # 在鼠标位置显示菜单
             context_menu.exec_(event.globalPos())
             return True
+        
+        # 如果没有点击测量线或角度测量，显示通用菜单
+        context_menu = QtWidgets.QMenu(self)
+        
+        # 添加选择种子点的选项
+        add_seed_action = context_menu.addAction("添加区域生长种子点")
+        add_seed_action.triggered.connect(lambda: self.add_seed_point(scene_pos))
+        
+        # 添加清除所有种子点的选项
+        if self.parent_viewer and hasattr(self.parent_viewer, 'region_growing_seed_points') and self.parent_viewer.region_growing_seed_points:
+            clear_seeds_action = context_menu.addAction("清除所有种子点")
+            clear_seeds_action.triggered.connect(self.clear_all_seed_points)
+        
+        # 在鼠标位置显示菜单
+        context_menu.exec_(event.globalPos())
+        return True
+    
+    def add_seed_point(self, scene_pos):
+        """添加区域生长的种子点"""
+        if not self.parent_viewer:
+            return
+        
+        # 将场景坐标转换为图像坐标
+        x = int(scene_pos.x())
+        y = int(scene_pos.y())
+        
+        # 获取当前切片索引
+        current_slice = self.slider.value()
+        
+        # 根据视图类型确定3D坐标
+        # 需要知道这是哪个视图（Axial, Sagittal, Coronal）
+        if "Axial" in self.title:
+            # Axial视图: z = current_slice, y = y, x = x
+            seed_point = (current_slice, y, x)
+        elif "Sagittal" in self.title:
+            # Sagittal视图: z = y, y = x, x = current_slice
+            seed_point = (y, x, current_slice)
+        elif "Coronal" in self.title:
+            # Coronal视图: z = y, y = current_slice, x = x
+            seed_point = (y, current_slice, x)
+        else:
+            seed_point = (current_slice, y, x)
+        
+        # 添加到父窗口的种子点列表
+        if hasattr(self.parent_viewer, 'add_region_growing_seed_point'):
+            self.parent_viewer.add_region_growing_seed_point(seed_point)
             
-        return False
+            # 在图像上标记种子点
+            self.mark_seed_point(scene_pos)
+            
+            # 在状态栏显示简洁提示（如果父窗口有状态栏）
+            if hasattr(self.parent_viewer, 'status_label'):
+                total_seeds = len(self.parent_viewer.region_growing_seed_points) if hasattr(self.parent_viewer, 'region_growing_seed_points') else 1
+                self.parent_viewer.status_label.setText(
+                    f"✓ 种子点已添加: {seed_point} (共 {total_seeds} 个) | "
+                    f"继续右键添加更多，或在菜单选择\"传统分割检测\" -> \"区域生长\"开始分割"
+                )
+            
+            print(f"种子点已添加: {seed_point} (在 {self.title} 视图，切片 {current_slice})")
+    
+    def mark_seed_point(self, pos):
+        """在图像上标记种子点"""
+        # 创建一个十字标记
+        pen = QtGui.QPen(QtCore.Qt.red, 2)
+        
+        # 绘制十字
+        size = 5
+        h_line = self.scene.addLine(pos.x() - size, pos.y(), pos.x() + size, pos.y(), pen)
+        v_line = self.scene.addLine(pos.x(), pos.y() - size, pos.x(), pos.y() + size, pen)
+        
+        # 绘制小圆圈
+        circle = self.scene.addEllipse(pos.x() - 3, pos.y() - 3, 6, 6, pen)
+        
+        # 保存标记引用（用于后续清除）
+        if not hasattr(self, 'seed_point_marks'):
+            self.seed_point_marks = []
+        self.seed_point_marks.append((h_line, v_line, circle))
+    
+    def clear_all_seed_points(self):
+        """清除所有种子点"""
+        if self.parent_viewer and hasattr(self.parent_viewer, 'clear_region_growing_seed_points'):
+            self.parent_viewer.clear_region_growing_seed_points()
+            
+            # 清除所有视图中的标记
+            self._clear_seed_marks_in_all_views()
+            
+            # 在状态栏显示简洁提示
+            if hasattr(self.parent_viewer, 'status_label'):
+                self.parent_viewer.status_label.setText("✓ 所有种子点已清除")
+            
+            print("所有种子点已清除")
+    
+    def _clear_seed_marks_in_all_views(self):
+        """清除所有视图中的种子点标记"""
+        if not self.parent_viewer:
+            return
+        
+        # 清除所有视图中的标记
+        for viewer in [self.parent_viewer.axial_viewer, 
+                      self.parent_viewer.sag_viewer, 
+                      self.parent_viewer.cor_viewer]:
+            if viewer and hasattr(viewer, 'seed_point_marks'):
+                for h_line, v_line, circle in viewer.seed_point_marks:
+                    try:
+                        viewer.scene.removeItem(h_line)
+                        viewer.scene.removeItem(v_line)
+                        viewer.scene.removeItem(circle)
+                    except:
+                        pass
+                viewer.seed_point_marks = []
         
     def find_line_near_point(self, pos, threshold=5):
         """
