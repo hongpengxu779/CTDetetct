@@ -9,6 +9,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib
 import platform
+from ..viewers import SliceViewer, VolumeViewer
 
 # 设置matplotlib中文字体支持
 if platform.system() == 'Windows':
@@ -445,47 +446,117 @@ class UIComponents:
         right_panel_layout.setContentsMargins(8, 8, 8, 8)
         right_panel_layout.setSpacing(10)  # 增加两个面板之间的间距
         
-        # 热磁图层面板（上半部分） - 浅色风格
-        heatmap_panel = QtWidgets.QWidget()
-        heatmap_panel.setStyleSheet("""
+        # 数据列表面板（上半部分） - 浅色风格
+        data_list_panel = QtWidgets.QWidget()
+        data_list_panel.setStyleSheet("""
             QWidget {
                 background-color: #f5f5f5;
                 border: 1px solid #d0d0d0;
                 border-radius: 2px;
             }
         """)
-        heatmap_layout = QtWidgets.QVBoxLayout(heatmap_panel)
-        heatmap_layout.setContentsMargins(2, 2, 2, 2)
-        heatmap_layout.setSpacing(2)
+        data_list_layout = QtWidgets.QVBoxLayout(data_list_panel)
+        data_list_layout.setContentsMargins(4, 4, 4, 4)
+        data_list_layout.setSpacing(4)
         
         # 标题栏
-        heatmap_label = QtWidgets.QLabel("热力图层叠加")
-        heatmap_label.setStyleSheet("""
+        data_list_label = QtWidgets.QLabel("已导入数据列表")
+        data_list_label.setStyleSheet("""
             QLabel {
                 color: #424242; 
                 font-size: 10pt; 
+                font-weight: bold;
                 background-color: transparent;
                 border: none;
                 padding: 4px;
             }
         """)
-        heatmap_label.setAlignment(QtCore.Qt.AlignCenter)
-        heatmap_layout.addWidget(heatmap_label)
+        data_list_label.setAlignment(QtCore.Qt.AlignCenter)
+        data_list_layout.addWidget(data_list_label)
         
-        # 提示信息
-        heatmap_info = QtWidgets.QLabel("功能开发中")
-        heatmap_info.setStyleSheet("""
-            QLabel {
-                color: #999999;
-                font-size: 10pt;
-                background-color: transparent;
-                border: none;
+        # 创建列表控件
+        self.data_list_widget = QtWidgets.QListWidget()
+        self.data_list_widget.setStyleSheet("""
+            QListWidget {
+                background-color: white;
+                border: 1px solid #d0d0d0;
+                border-radius: 2px;
+                padding: 2px;
+            }
+            QListWidget::item {
+                padding: 4px;
+                border-bottom: 1px solid #e0e0e0;
+            }
+            QListWidget::item:hover {
+                background-color: #e3f2fd;
+            }
+            QListWidget::item:selected {
+                background-color: #bbdefb;
             }
         """)
-        heatmap_info.setAlignment(QtCore.Qt.AlignCenter)
-        heatmap_layout.addWidget(heatmap_info)
+        data_list_layout.addWidget(self.data_list_widget)
         
-        heatmap_layout.addStretch()
+        # 添加提示标签
+        data_hint_label = QtWidgets.QLabel("✓ 勾选的数据将显示在视图中")
+        data_hint_label.setStyleSheet("""
+            QLabel {
+                color: #666666;
+                font-size: 8pt;
+                background-color: transparent;
+                border: none;
+                padding: 2px;
+            }
+        """)
+        data_hint_label.setAlignment(QtCore.Qt.AlignCenter)
+        data_list_layout.addWidget(data_hint_label)
+        
+        # 添加按钮区域
+        button_layout = QtWidgets.QHBoxLayout()
+        button_layout.setSpacing(4)
+        
+        # 删除选中数据按钮
+        self.remove_data_btn = QtWidgets.QPushButton("删除")
+        self.remove_data_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffebee;
+                color: #c62828;
+                border: 1px solid #ef9a9a;
+                border-radius: 3px;
+                padding: 4px 8px;
+                font-size: 9pt;
+            }
+            QPushButton:hover {
+                background-color: #ffcdd2;
+            }
+            QPushButton:pressed {
+                background-color: #ef9a9a;
+            }
+        """)
+        self.remove_data_btn.clicked.connect(self.remove_selected_data)
+        button_layout.addWidget(self.remove_data_btn)
+        
+        # 清空所有数据按钮
+        self.clear_all_data_btn = QtWidgets.QPushButton("清空")
+        self.clear_all_data_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #fff3e0;
+                color: #e65100;
+                border: 1px solid #ffcc80;
+                border-radius: 3px;
+                padding: 4px 8px;
+                font-size: 9pt;
+            }
+            QPushButton:hover {
+                background-color: #ffe0b2;
+            }
+            QPushButton:pressed {
+                background-color: #ffcc80;
+            }
+        """)
+        self.clear_all_data_btn.clicked.connect(self.clear_all_data)
+        button_layout.addWidget(self.clear_all_data_btn)
+        
+        data_list_layout.addLayout(button_layout)
         
         # 灰度直方图面板（下半部分） - 浅色背景风格
         histogram_panel = QtWidgets.QWidget()
@@ -552,7 +623,7 @@ class UIComponents:
         histogram_layout.addWidget(self.histogram_canvas, 1)  # 添加stretch factor让画布填充
         
         # 将两个面板添加到右侧布局（上下排列，各占50%）
-        right_panel_layout.addWidget(heatmap_panel, 1)
+        right_panel_layout.addWidget(data_list_panel, 1)
         right_panel_layout.addWidget(histogram_panel, 1)
         
         # 将右侧面板添加到主分割器
@@ -911,4 +982,275 @@ class UIComponents:
         if hasattr(self, 'status_label'):
             stats_text = f"最小值: {data_min:.0f}  |  最大值: {data_max:.0f}  |  平均值: {data_mean:.1f}  |  标准差: {data_std:.1f}"
             self.status_label.setText(stats_text)
+    
+    def add_data_to_list(self, data_name, data_item):
+        """
+        向数据列表中添加新的数据项
+        确保每次只有一个复选框被选中
+        
+        参数
+        ----
+        data_name : str
+            数据的显示名称
+        data_item : dict
+            数据项，包含image, array, spacing等信息
+        """
+        # 临时断开信号，避免触发多次切换
+        try:
+            self.data_list_widget.itemChanged.disconnect(self.on_data_item_changed)
+        except:
+            pass  # 如果信号未连接，忽略错误
+        
+        # 取消所有现有项的选中状态（单选机制）
+        for i in range(self.data_list_widget.count()):
+            existing_item = self.data_list_widget.item(i)
+            existing_item.setCheckState(QtCore.Qt.Unchecked)
+        
+        # 创建新列表项
+        list_item = QtWidgets.QListWidgetItem()
+        list_item.setFlags(list_item.flags() | QtCore.Qt.ItemIsUserCheckable)
+        list_item.setCheckState(QtCore.Qt.Checked)  # 新添加的数据默认勾选
+        list_item.setText(data_name)
+        
+        # 将数据信息存储到item中
+        list_item.setData(QtCore.Qt.UserRole, data_item)
+        
+        # 添加到列表
+        self.data_list_widget.addItem(list_item)
+        
+        # 重新连接信号
+        self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
+        
+        print(f"数据已添加到列表: {data_name} (已自动选中)")
+    
+    def on_data_item_changed(self, item):
+        """
+        当数据项的复选框状态改变时调用
+        确保每次只能选中一个复选框
+        
+        参数
+        ----
+        item : QListWidgetItem
+            状态改变的列表项
+        """
+        data_name = item.text()
+        is_checked = item.checkState() == QtCore.Qt.Checked
+        
+        if is_checked:
+            # 临时断开信号，避免递归调用
+            self.data_list_widget.itemChanged.disconnect(self.on_data_item_changed)
+            
+            # 取消其他项的选中状态（单选机制）
+            for i in range(self.data_list_widget.count()):
+                other_item = self.data_list_widget.item(i)
+                if other_item != item and other_item.checkState() == QtCore.Qt.Checked:
+                    other_item.setCheckState(QtCore.Qt.Unchecked)
+            
+            # 重新连接信号
+            self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
+            
+            # 切换到选中的数据
+            data_item = item.data(QtCore.Qt.UserRole)
+            self.switch_to_data(data_item, data_name)
+            print(f"切换到数据: {data_name}")
+        
+        else:
+            # 如果试图取消选中当前项，检查是否还有其他选中项
+            has_other_checked = False
+            for i in range(self.data_list_widget.count()):
+                other_item = self.data_list_widget.item(i)
+                if other_item != item and other_item.checkState() == QtCore.Qt.Checked:
+                    has_other_checked = True
+                    break
+            
+            # 如果没有其他选中项，强制保持当前项选中（至少要有一个数据被选中）
+            if not has_other_checked:
+                # 临时断开信号，避免递归调用
+                self.data_list_widget.itemChanged.disconnect(self.on_data_item_changed)
+                item.setCheckState(QtCore.Qt.Checked)
+                self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
+                print(f"至少需要选中一个数据项，保持 '{data_name}' 为选中状态")
+    
+    def switch_to_data(self, data_item, data_name):
+        """
+        切换显示的数据
+        
+        参数
+        ----
+        data_item : dict
+            要显示的数据项
+        data_name : str
+            数据名称
+        """
+        try:
+            # 清除现有视图
+            self.clear_viewers()
+            
+            # 恢复数据
+            self.image = data_item['image']
+            self.array = data_item['array']
+            self.depth_z, self.depth_y, self.depth_x = data_item['shape']
+            self.spacing = data_item['spacing']
+            
+            # 如果有RGB数组，也恢复
+            if 'rgb_array' in data_item:
+                self.rgb_array = data_item['rgb_array']
+            else:
+                self.rgb_array = None
+            
+            # 设置raw_array
+            self.raw_array = self.array
+            
+            # 重新创建视图
+            data_max = float(self.array.max())
+            
+            # 创建三个方向的切片视图
+            if hasattr(self, 'rgb_array') and self.rgb_array is not None:
+                # RGB图像的切片获取
+                self.axial_viewer = SliceViewer("Axial (彩色)",
+                                          lambda z: self.rgb_array[z, :, :, :],
+                                          self.depth_z)
+                self.sag_viewer = SliceViewer("Sagittal (彩色)",
+                                        lambda x: self.rgb_array[:, :, x, :],
+                                        self.depth_x)
+                self.cor_viewer = SliceViewer("Coronal (彩色)",
+                                        lambda y: self.rgb_array[:, y, :, :],
+                                        self.depth_y)
+            else:
+                # 灰度图像的切片获取
+                self.axial_viewer = SliceViewer("Axial",
+                                          lambda z: self.apply_window_level_to_slice(self.array[z, :, :]),
+                                          self.depth_z,
+                                          parent_viewer=self)
+                self.sag_viewer = SliceViewer("Sagittal",
+                                        lambda x: self.apply_window_level_to_slice(self.array[:, :, x]),
+                                        self.depth_x,
+                                        parent_viewer=self)
+                self.cor_viewer = SliceViewer("Coronal",
+                                        lambda y: self.apply_window_level_to_slice(self.array[:, y, :]),
+                                        self.depth_y,
+                                        parent_viewer=self)
+            
+            # 更新ROI范围滑动条
+            if hasattr(self, 'roi_z_min_slider'):
+                self.roi_z_min_slider.setMaximum(self.depth_z - 1)
+                self.roi_z_max_slider.setMaximum(self.depth_z - 1)
+                self.roi_z_max_slider.setValue(min(50, self.depth_z - 1))
+            
+            if hasattr(self, 'roi_x_min_slider'):
+                self.roi_x_min_slider.setMaximum(self.depth_x - 1)
+                self.roi_x_max_slider.setMaximum(self.depth_x - 1)
+                self.roi_x_max_slider.setValue(self.depth_x - 1)
+            
+            if hasattr(self, 'roi_y_min_slider'):
+                self.roi_y_min_slider.setMaximum(self.depth_y - 1)
+                self.roi_y_max_slider.setMaximum(self.depth_y - 1)
+                self.roi_y_max_slider.setValue(self.depth_y - 1)
+            
+            # 只有在数据不全为0时才创建3D视图
+            if data_max > 0:
+                # 创建三维体渲染视图
+                self.volume_viewer = VolumeViewer(self.array, self.spacing, simplified=True, downsample_factor=1)
+                
+                # 四宫格布局
+                self.grid_layout.addWidget(self.axial_viewer, 0, 0)
+                self.grid_layout.addWidget(self.sag_viewer, 0, 1)
+                self.grid_layout.addWidget(self.cor_viewer, 1, 0)
+                self.grid_layout.addWidget(self.volume_viewer, 1, 1)
+            else:
+                # 数据全为0，只显示2D视图
+                self.grid_layout.addWidget(self.axial_viewer, 0, 0)
+                self.grid_layout.addWidget(self.sag_viewer, 0, 1)
+                self.grid_layout.addWidget(self.cor_viewer, 1, 0)
+                
+                # 在右下角显示提示信息
+                info_label = QtWidgets.QLabel("3D视图不可用\n(数据全为0)")
+                info_label.setAlignment(QtCore.Qt.AlignCenter)
+                info_label.setStyleSheet("QLabel { background-color: #f0f0f0; color: #666; font-size: 14pt; }")
+                self.grid_layout.addWidget(info_label, 1, 1)
+            
+            # 更新窗口标题
+            self.setWindowTitle(f"CT Viewer - {data_name}")
+            
+            # 初始化窗宽窗位
+            if hasattr(self, 'reset_window_level'):
+                self.reset_window_level()
+            
+            # 更新灰度直方图
+            if hasattr(self, 'update_histogram'):
+                self.update_histogram(self.array)
+            
+            print(f"成功切换到数据: {data_name}")
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(self, "错误", f"切换数据时出错：{str(e)}")
+    
+    def remove_selected_data(self):
+        """删除当前选中的数据项（确保单选机制）"""
+        current_item = self.data_list_widget.currentItem()
+        if current_item:
+            reply = QtWidgets.QMessageBox.question(
+                self, '确认删除', 
+                f'确定要删除数据 "{current_item.text()}" 吗？',
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+                QtWidgets.QMessageBox.No
+            )
+            
+            if reply == QtWidgets.QMessageBox.Yes:
+                data_name = current_item.text()
+                row = self.data_list_widget.row(current_item)
+                
+                # 临时断开信号
+                try:
+                    self.data_list_widget.itemChanged.disconnect(self.on_data_item_changed)
+                except:
+                    pass
+                
+                # 删除项
+                self.data_list_widget.takeItem(row)
+                print(f"已删除数据: {data_name}")
+                
+                # 如果删除后还有数据，自动选中第一个（单选机制）
+                if self.data_list_widget.count() > 0:
+                    # 确保所有项都未选中
+                    for i in range(self.data_list_widget.count()):
+                        item = self.data_list_widget.item(i)
+                        item.setCheckState(QtCore.Qt.Unchecked)
+                    
+                    # 只选中第一个
+                    first_item = self.data_list_widget.item(0)
+                    first_item.setCheckState(QtCore.Qt.Checked)
+                    
+                    # 重新连接信号
+                    self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
+                    
+                    # 手动触发切换
+                    data_item = first_item.data(QtCore.Qt.UserRole)
+                    self.switch_to_data(data_item, first_item.text())
+                else:
+                    # 重新连接信号
+                    self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
+                    
+                    # 没有数据了，清除视图
+                    self.clear_viewers()
+                    print("列表已空，已清除所有视图")
+    
+    def clear_all_data(self):
+        """清空所有数据"""
+        if self.data_list_widget.count() == 0:
+            return
+        
+        reply = QtWidgets.QMessageBox.question(
+            self, '确认清空', 
+            '确定要清空所有数据吗？',
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+        
+        if reply == QtWidgets.QMessageBox.Yes:
+            self.data_list_widget.clear()
+            self.clear_viewers()
+            print("已清空所有数据")
 

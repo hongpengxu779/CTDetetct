@@ -62,99 +62,93 @@ class DataLoader:
                 self.load_data(filename)
     
     def load_data(self, filename, shape=None, spacing=None, dtype=np.uint16):
-        """加载CT数据并更新视图"""
+        """加载CT数据并添加到数据列表"""
         try:
-            # 清除旧的视图组件
-            self.clear_viewers()
-            
             # 读取CT数据
             CTdata = CTImageData(filename, shape, spacing)
-            self.image = CTdata.image
-            self.array = CTdata.array
+            temp_image = CTdata.image
+            temp_array = CTdata.array
             
             # 检查数据类型并获取尺寸
-            original_dtype = self.array.dtype
-            print(f"原始数据类型: {original_dtype}, 形状: {self.array.shape}")
+            original_dtype = temp_array.dtype
+            print(f"原始数据类型: {original_dtype}, 形状: {temp_array.shape}")
             
             # 检查是否为RGB图像
             is_rgb = False
+            temp_rgb_array = None
             
-            if len(self.array.shape) == 4:
+            if len(temp_array.shape) == 4:
                 # 检查是否为 (Z, Y, X, 3/4) 格式
-                if self.array.shape[3] in [3, 4]:
+                if temp_array.shape[3] in [3, 4]:
                     is_rgb = True
-                    print(f"检测到RGB图像（通道在最后）: {self.array.shape}")
-                    self.rgb_array = self.array.copy()
-                    self.depth_z, self.depth_y, self.depth_x = self.array.shape[:3]
+                    print(f"检测到RGB图像（通道在最后）: {temp_array.shape}")
+                    temp_rgb_array = temp_array.copy()
+                    temp_depth_z, temp_depth_y, temp_depth_x = temp_array.shape[:3]
                 # 检查是否为 (3/4, Z, Y, X) 格式（NIfTI常见格式）
-                elif self.array.shape[0] in [3, 4]:
+                elif temp_array.shape[0] in [3, 4]:
                     is_rgb = True
-                    print(f"检测到RGB图像（通道在最前）: {self.array.shape}")
+                    print(f"检测到RGB图像（通道在最前）: {temp_array.shape}")
                     # 需要转置维度: (C, Z, Y, X) -> (Z, Y, X, C)
-                    self.rgb_array = np.transpose(self.array, (1, 2, 3, 0))
-                    print(f"转置后形状: {self.rgb_array.shape}")
-                    self.depth_z, self.depth_y, self.depth_x = self.rgb_array.shape[:3]
+                    temp_rgb_array = np.transpose(temp_array, (1, 2, 3, 0))
+                    print(f"转置后形状: {temp_rgb_array.shape}")
+                    temp_depth_z, temp_depth_y, temp_depth_x = temp_rgb_array.shape[:3]
                 else:
                     # 其他4D格式，按普通3D处理
                     is_rgb = False
-                    self.depth_z, self.depth_y, self.depth_x = self.array.shape[:3]
+                    temp_depth_z, temp_depth_y, temp_depth_x = temp_array.shape[:3]
             else:
                 # 3D或其他维度
                 is_rgb = False
-                if len(self.array.shape) == 3:
-                    self.depth_z, self.depth_y, self.depth_x = self.array.shape
+                if len(temp_array.shape) == 3:
+                    temp_depth_z, temp_depth_y, temp_depth_x = temp_array.shape
             
             # 获取spacing，确保只有3个值（x, y, z）
-            spacing_raw = self.image.GetSpacing()
+            spacing_raw = temp_image.GetSpacing()
             if len(spacing_raw) > 3:
                 # RGB图像可能有4个spacing值，只取前3个（忽略颜色通道）
-                self.spacing = spacing_raw[:3]
-                print(f"Spacing从{len(spacing_raw)}维调整为3维: {self.spacing}")
+                temp_spacing = spacing_raw[:3]
+                print(f"Spacing从{len(spacing_raw)}维调整为3维: {temp_spacing}")
             else:
-                self.spacing = spacing_raw
+                temp_spacing = spacing_raw
             
             if is_rgb:
-                print(f"RGB数组形状: {self.rgb_array.shape}")
-                print(f"数据尺寸: Z={self.depth_z}, Y={self.depth_y}, X={self.depth_x}")
-                print(f"Spacing: {self.spacing}")
+                print(f"RGB数组形状: {temp_rgb_array.shape}")
+                print(f"数据尺寸: Z={temp_depth_z}, Y={temp_depth_y}, X={temp_depth_x}")
+                print(f"Spacing: {temp_spacing}")
                 
                 # 为了3D显示，将RGB转换为灰度
-                if self.rgb_array.shape[3] >= 3:
-                    gray = (0.299 * self.rgb_array[:,:,:,0] + 
-                           0.587 * self.rgb_array[:,:,:,1] + 
-                           0.114 * self.rgb_array[:,:,:,2])
+                if temp_rgb_array.shape[3] >= 3:
+                    gray = (0.299 * temp_rgb_array[:,:,:,0] + 
+                           0.587 * temp_rgb_array[:,:,:,1] + 
+                           0.114 * temp_rgb_array[:,:,:,2])
                     # 转换为uint16以供VolumeViewer使用
-                    if self.rgb_array.dtype == np.uint8:
-                        self.array = (gray.astype(np.float32) * 257).astype(np.uint16)
+                    if temp_rgb_array.dtype == np.uint8:
+                        temp_array = (gray.astype(np.float32) * 257).astype(np.uint16)
                     else:
-                        self.array = gray.astype(np.uint16)
-                    print(f"RGB已转换为灰度用于3D显示，范围: [{self.array.min()}, {self.array.max()}]")
+                        temp_array = gray.astype(np.uint16)
+                    print(f"RGB已转换为灰度用于3D显示，范围: [{temp_array.min()}, {temp_array.max()}]")
             else:
                 # 非RGB图像，保持原有逻辑
-                self.rgb_array = None
+                temp_rgb_array = None
                 
-                if self.array.dtype == np.uint8:
+                if temp_array.dtype == np.uint8:
                     # 将uint8转换为uint16，扩展到完整范围
                     print("检测到uint8数据，转换为uint16以便3D显示")
-                    self.array = (self.array.astype(np.float32) * 257).astype(np.uint16)
-                elif self.array.dtype != np.uint16:
+                    temp_array = (temp_array.astype(np.float32) * 257).astype(np.uint16)
+                elif temp_array.dtype != np.uint16:
                     # 其他类型也转换为uint16
-                    print(f"转换数据类型 {self.array.dtype} -> uint16")
-                    data_min = self.array.min()
-                    data_max = self.array.max()
+                    print(f"转换数据类型 {temp_array.dtype} -> uint16")
+                    data_min = temp_array.min()
+                    data_max = temp_array.max()
                     if data_max > data_min:
-                        self.array = ((self.array - data_min) / (data_max - data_min) * 65535).astype(np.uint16)
+                        temp_array = ((temp_array - data_min) / (data_max - data_min) * 65535).astype(np.uint16)
                     else:
-                        self.array = self.array.astype(np.uint16)
+                        temp_array = temp_array.astype(np.uint16)
             
             # 检查数据范围，判断是否为分割结果
-            data_min = float(self.array.min())
-            data_max = float(self.array.max())
+            data_min = float(temp_array.min())
+            data_max = float(temp_array.max())
             print(f"转换后数据范围: [{data_min}, {data_max}]")
-            
-            # 设置raw_array用于ROI 3D预览（必须在创建视图之前！）
-            self.raw_array = self.array
-            print(f"raw_array已设置，形状: {self.raw_array.shape}")
             
             # 如果数据范围很小或全为0，可能是分割结果且没有检测到目标
             if data_max == 0 or (data_max - data_min) < 1:
@@ -168,6 +162,35 @@ class DataLoader:
                     "2. 模型权重是否匹配\n"
                     "3. 分割阈值是否需要调整"
                 )
+            
+            # 创建数据项保存所有信息
+            data_item = {
+                'image': temp_image,
+                'array': temp_array,
+                'shape': (temp_depth_z, temp_depth_y, temp_depth_x),
+                'spacing': temp_spacing,
+                'rgb_array': temp_rgb_array
+            }
+            
+            # 生成数据名称
+            import os
+            data_name = os.path.basename(filename)
+            
+            # 添加到数据列表
+            if hasattr(self, 'add_data_to_list'):
+                self.add_data_to_list(data_name, data_item)
+            
+            # 设置为当前数据（用于第一次加载或直接显示）
+            self.image = temp_image
+            self.array = temp_array
+            self.depth_z, self.depth_y, self.depth_x = temp_depth_z, temp_depth_y, temp_depth_x
+            self.spacing = temp_spacing
+            self.rgb_array = temp_rgb_array
+            self.raw_array = temp_array
+            print(f"raw_array已设置，形状: {self.raw_array.shape}")
+            
+            # 清除旧的视图组件
+            self.clear_viewers()
             
             # 创建三个方向的切片视图
             if hasattr(self, 'rgb_array') and self.rgb_array is not None:
