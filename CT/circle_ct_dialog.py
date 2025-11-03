@@ -5,10 +5,14 @@ from PyQt5 import QtWidgets, QtCore
 import os
 import time
 import numpy as np
+import json
 
 
 class CircleCTReconstructionDialog(QtWidgets.QDialog):
     """圆轨迹CT重建对话框 - 简化版"""
+    
+    # 定义配置文件路径
+    CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "circle_ct_params.json")
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -16,6 +20,13 @@ class CircleCTReconstructionDialog(QtWidgets.QDialog):
         self.setWindowTitle("CT圆轨迹重建")
         self.setMinimumWidth(600)
         self.setMinimumHeight(400)
+        
+        # 上次使用的参数
+        self.last_params = self.load_last_params()
+        
+        # 设置窗口图标
+        icon = QtWidgets.QApplication.style().standardIcon(QtWidgets.QStyle.SP_ComputerIcon)
+        self.setWindowIcon(icon)
         
         # 创建布局
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -46,13 +57,13 @@ class CircleCTReconstructionDialog(QtWidgets.QDialog):
         param_layout.addWidget(QtWidgets.QLabel("投影角度数量:"), row, 0)
         self.num_angles_input = QtWidgets.QSpinBox()
         self.num_angles_input.setRange(100, 10000)
-        self.num_angles_input.setValue(1440)
+        self.num_angles_input.setValue(self.last_params.get("num_angles", 1440))
         param_layout.addWidget(self.num_angles_input, row, 1)
         
         param_layout.addWidget(QtWidgets.QLabel("探测器行数:"), row, 2)
         self.num_rows_input = QtWidgets.QSpinBox()
         self.num_rows_input.setRange(1, 4096)
-        self.num_rows_input.setValue(1536)
+        self.num_rows_input.setValue(self.last_params.get("num_rows", 1536))
         param_layout.addWidget(self.num_rows_input, row, 3)
         
         # 探测器参数
@@ -60,13 +71,13 @@ class CircleCTReconstructionDialog(QtWidgets.QDialog):
         param_layout.addWidget(QtWidgets.QLabel("探测器列数:"), row, 0)
         self.num_cols_input = QtWidgets.QSpinBox()
         self.num_cols_input.setRange(1, 4096)
-        self.num_cols_input.setValue(1536)
+        self.num_cols_input.setValue(self.last_params.get("num_cols", 1536))
         param_layout.addWidget(self.num_cols_input, row, 1)
         
         param_layout.addWidget(QtWidgets.QLabel("像素高度:"), row, 2)
         self.pixel_height_input = QtWidgets.QDoubleSpinBox()
         self.pixel_height_input.setRange(0.001, 10.0)
-        self.pixel_height_input.setValue(0.278)
+        self.pixel_height_input.setValue(self.last_params.get("pixel_height", 0.278))
         self.pixel_height_input.setDecimals(6)
         param_layout.addWidget(self.pixel_height_input, row, 3)
         
@@ -75,14 +86,14 @@ class CircleCTReconstructionDialog(QtWidgets.QDialog):
         param_layout.addWidget(QtWidgets.QLabel("像素宽度:"), row, 0)
         self.pixel_width_input = QtWidgets.QDoubleSpinBox()
         self.pixel_width_input.setRange(0.001, 10.0)
-        self.pixel_width_input.setValue(0.278)
+        self.pixel_width_input.setValue(self.last_params.get("pixel_width", 0.278))
         self.pixel_width_input.setDecimals(6)
         param_layout.addWidget(self.pixel_width_input, row, 1)
         
         param_layout.addWidget(QtWidgets.QLabel("中心行:"), row, 2)
         self.center_row_input = QtWidgets.QDoubleSpinBox()
         self.center_row_input.setRange(0.0, 4096.0)
-        self.center_row_input.setValue(762.183)
+        self.center_row_input.setValue(self.last_params.get("center_row", 762.183))
         self.center_row_input.setDecimals(3)
         param_layout.addWidget(self.center_row_input, row, 3)
         
@@ -91,14 +102,14 @@ class CircleCTReconstructionDialog(QtWidgets.QDialog):
         param_layout.addWidget(QtWidgets.QLabel("中心列:"), row, 0)
         self.center_col_input = QtWidgets.QDoubleSpinBox()
         self.center_col_input.setRange(0.0, 4096.0)
-        self.center_col_input.setValue(781.493)
+        self.center_col_input.setValue(self.last_params.get("center_col", 781.493))
         self.center_col_input.setDecimals(3)
         param_layout.addWidget(self.center_col_input, row, 1)
         
         param_layout.addWidget(QtWidgets.QLabel("源到物体距离(SOD):"), row, 2)
         self.sod_input = QtWidgets.QDoubleSpinBox()
         self.sod_input.setRange(1.0, 2000.0)
-        self.sod_input.setValue(501.39)
+        self.sod_input.setValue(self.last_params.get("sod", 501.39))
         self.sod_input.setDecimals(2)
         param_layout.addWidget(self.sod_input, row, 3)
         
@@ -107,7 +118,7 @@ class CircleCTReconstructionDialog(QtWidgets.QDialog):
         param_layout.addWidget(QtWidgets.QLabel("源到探测器距离(SDD):"), row, 0)
         self.sdd_input = QtWidgets.QDoubleSpinBox()
         self.sdd_input.setRange(1.0, 2000.0)
-        self.sdd_input.setValue(1195.0)
+        self.sdd_input.setValue(self.last_params.get("sdd", 1195.0))
         self.sdd_input.setDecimals(2)
         param_layout.addWidget(self.sdd_input, row, 1)
         
@@ -116,13 +127,13 @@ class CircleCTReconstructionDialog(QtWidgets.QDialog):
         param_layout.addWidget(QtWidgets.QLabel("体素X维度:"), row, 0)
         self.num_x_input = QtWidgets.QSpinBox()
         self.num_x_input.setRange(1, 2048)
-        self.num_x_input.setValue(1780)
+        self.num_x_input.setValue(self.last_params.get("num_x", 1780))
         param_layout.addWidget(self.num_x_input, row, 1)
         
         param_layout.addWidget(QtWidgets.QLabel("体素Y维度:"), row, 2)
         self.num_y_input = QtWidgets.QSpinBox()
         self.num_y_input.setRange(1, 2048)
-        self.num_y_input.setValue(977)
+        self.num_y_input.setValue(self.last_params.get("num_y", 977))
         param_layout.addWidget(self.num_y_input, row, 3)
         
         # 体素Z维度和体素宽度
@@ -130,13 +141,13 @@ class CircleCTReconstructionDialog(QtWidgets.QDialog):
         param_layout.addWidget(QtWidgets.QLabel("体素Z维度:"), row, 0)
         self.num_z_input = QtWidgets.QSpinBox()
         self.num_z_input.setRange(1, 2048)
-        self.num_z_input.setValue(1990)
+        self.num_z_input.setValue(self.last_params.get("num_z", 1990))
         param_layout.addWidget(self.num_z_input, row, 1)
         
         param_layout.addWidget(QtWidgets.QLabel("体素宽度:"), row, 2)
         self.voxel_width_input = QtWidgets.QDoubleSpinBox()
         self.voxel_width_input.setRange(0.001, 1.0)
-        self.voxel_width_input.setValue(0.09)
+        self.voxel_width_input.setValue(self.last_params.get("voxel_width", 0.09))
         self.voxel_width_input.setDecimals(6)
         param_layout.addWidget(self.voxel_width_input, row, 3)
         
@@ -145,14 +156,14 @@ class CircleCTReconstructionDialog(QtWidgets.QDialog):
         param_layout.addWidget(QtWidgets.QLabel("体素高度:"), row, 0)
         self.voxel_height_input = QtWidgets.QDoubleSpinBox()
         self.voxel_height_input.setRange(0.001, 1.0)
-        self.voxel_height_input.setValue(0.09)
+        self.voxel_height_input.setValue(self.last_params.get("voxel_height", 0.09))
         self.voxel_height_input.setDecimals(6)
         param_layout.addWidget(self.voxel_height_input, row, 1)
         
         param_layout.addWidget(QtWidgets.QLabel("X偏移:"), row, 2)
         self.offset_x_input = QtWidgets.QDoubleSpinBox()
         self.offset_x_input.setRange(-100.0, 100.0)
-        self.offset_x_input.setValue(3.856697)
+        self.offset_x_input.setValue(self.last_params.get("offset_x", 3.856697))
         self.offset_x_input.setDecimals(6)
         param_layout.addWidget(self.offset_x_input, row, 3)
         
@@ -160,15 +171,15 @@ class CircleCTReconstructionDialog(QtWidgets.QDialog):
         row += 1
         param_layout.addWidget(QtWidgets.QLabel("Y偏移:"), row, 0)
         self.offset_y_input = QtWidgets.QDoubleSpinBox()
-        self.offset_y_input.setRange(-100.0, 100.0)
-        self.offset_y_input.setValue(-9.466439)
+        self.offset_y_input.setRange(-2000.0, 2000.0)
+        self.offset_y_input.setValue(self.last_params.get("offset_y", -9.466439))
         self.offset_y_input.setDecimals(6)
         param_layout.addWidget(self.offset_y_input, row, 1)
         
         param_layout.addWidget(QtWidgets.QLabel("Z偏移:"), row, 2)
         self.offset_z_input = QtWidgets.QDoubleSpinBox()
         self.offset_z_input.setRange(-100.0, 100.0)
-        self.offset_z_input.setValue(0.0)
+        self.offset_z_input.setValue(self.last_params.get("offset_z", 0.0))
         self.offset_z_input.setDecimals(6)
         param_layout.addWidget(self.offset_z_input, row, 3)
         
@@ -179,22 +190,22 @@ class CircleCTReconstructionDialog(QtWidgets.QDialog):
         
         self.roi_min_row = QtWidgets.QSpinBox()
         self.roi_min_row.setRange(0, 4096)
-        self.roi_min_row.setValue(15)
+        self.roi_min_row.setValue(self.last_params.get("roi_min_row", 15))
         self.roi_layout.addWidget(self.roi_min_row)
         
         self.roi_max_row = QtWidgets.QSpinBox()
         self.roi_max_row.setRange(0, 4096)
-        self.roi_max_row.setValue(1521)
+        self.roi_max_row.setValue(self.last_params.get("roi_max_row", 1521))
         self.roi_layout.addWidget(self.roi_max_row)
         
         self.roi_min_col = QtWidgets.QSpinBox()
         self.roi_min_col.setRange(0, 4096)
-        self.roi_min_col.setValue(111)
+        self.roi_min_col.setValue(self.last_params.get("roi_min_col", 111))
         self.roi_layout.addWidget(self.roi_min_col)
         
         self.roi_max_col = QtWidgets.QSpinBox()
         self.roi_max_col.setRange(0, 4096)
-        self.roi_max_col.setValue(1493)
+        self.roi_max_col.setValue(self.last_params.get("roi_max_col", 1493))
         self.roi_layout.addWidget(self.roi_max_col)
         
         param_layout.addLayout(self.roi_layout, row, 1, 1, 3)
@@ -217,10 +228,15 @@ class CircleCTReconstructionDialog(QtWidgets.QDialog):
     
     def browse_data_folder(self):
         """浏览选择DICOM数据文件夹"""
+        # 尝试使用上次的路径作为起始目录
+        start_dir = ""
+        if "data_path" in self.last_params:
+            start_dir = os.path.dirname(self.last_params["data_path"]) if os.path.exists(os.path.dirname(self.last_params["data_path"])) else ""
+        
         folder_path = QtWidgets.QFileDialog.getExistingDirectory(
             self, 
             "选择DICOM数据文件夹",
-            ""
+            start_dir
         )
         
         if folder_path:
@@ -436,6 +452,9 @@ class CircleCTReconstructionDialog(QtWidgets.QDialog):
             gc.collect()
             print("已释放重建临时数据内存")
             
+            # 保存参数以便下次使用
+            self.save_current_params()
+            
             # 关闭对话框
             self.accept()
             
@@ -447,4 +466,58 @@ class CircleCTReconstructionDialog(QtWidgets.QDialog):
             traceback.print_exc()
             QtWidgets.QMessageBox.critical(self, "错误", f"运行重建时出错: {str(e)}")
 
+    def load_last_params(self):
+        """加载上次使用的参数"""
+        try:
+            if os.path.exists(self.CONFIG_FILE):
+                with open(self.CONFIG_FILE, 'r') as f:
+                    return json.load(f)
+            return {}
+        except Exception as e:
+            print(f"加载参数文件失败: {str(e)}")
+            return {}
+    
+    def save_current_params(self):
+        """保存当前参数供下次使用"""
+        try:
+            params = {
+                "num_angles": self.num_angles_input.value(),
+                "num_rows": self.num_rows_input.value(),
+                "num_cols": self.num_cols_input.value(),
+                "pixel_height": self.pixel_height_input.value(),
+                "pixel_width": self.pixel_width_input.value(),
+                "center_row": self.center_row_input.value(),
+                "center_col": self.center_col_input.value(),
+                "sod": self.sod_input.value(),
+                "sdd": self.sdd_input.value(),
+                "num_x": self.num_x_input.value(),
+                "num_y": self.num_y_input.value(),
+                "num_z": self.num_z_input.value(),
+                "voxel_width": self.voxel_width_input.value(),
+                "voxel_height": self.voxel_height_input.value(),
+                "offset_x": self.offset_x_input.value(),
+                "offset_y": self.offset_y_input.value(),
+                "offset_z": self.offset_z_input.value(),
+                "roi_min_row": self.roi_min_row.value(),
+                "roi_max_row": self.roi_max_row.value(),
+                "roi_min_col": self.roi_min_col.value(),
+                "roi_max_col": self.roi_max_col.value(),
+            }
+            
+            # 如果有数据路径，也保存它
+            data_path = self.data_path.text().strip()
+            if data_path:
+                params["data_path"] = data_path
+                
+            # 确保目录存在
+            os.makedirs(os.path.dirname(self.CONFIG_FILE), exist_ok=True)
+            
+            # 保存到JSON文件
+            with open(self.CONFIG_FILE, 'w') as f:
+                json.dump(params, f, indent=4)
+                
+            print(f"参数已保存到 {self.CONFIG_FILE}")
+            
+        except Exception as e:
+            print(f"保存参数文件失败: {str(e)}")
 

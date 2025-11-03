@@ -51,15 +51,15 @@ class BallPhantomCalibrationDialog(QtWidgets.QDialog):
         row += 1
         param_layout.addWidget(QtWidgets.QLabel("源到物体距离 (SOD):"), row, 0)
         self.sod_input = QtWidgets.QDoubleSpinBox()
-        self.sod_input.setRange(10.0, 1000.0)
-        self.sod_input.setValue(255.8)
+        self.sod_input.setRange(10.0, 3000.0)
+        self.sod_input.setValue(669)
         self.sod_input.setDecimals(2)
         param_layout.addWidget(self.sod_input, row, 1)
         
         param_layout.addWidget(QtWidgets.QLabel("源到探测器距离 (SDD):"), row, 2)
         self.sdd_input = QtWidgets.QDoubleSpinBox()
-        self.sdd_input.setRange(10.0, 1000.0)
-        self.sdd_input.setValue(345.1)
+        self.sdd_input.setRange(10.0, 3000.0)
+        self.sdd_input.setValue(1470)
         self.sdd_input.setDecimals(2)
         param_layout.addWidget(self.sdd_input, row, 3)
         
@@ -372,6 +372,8 @@ class BallPhantomCalibrationDialog(QtWidgets.QDialog):
                 f.write('print("[centerRow, centerCol, sod, odd, psi, theta, phi, r, z_0, phase]")\n')
                 f.write('print("Guess of CT geometry parameters: ", optimized_params)\n')
                 f.write('print(f"优化后的损失: {cal.cost(optimized_params):.6f}")\n')
+                f.write('print(f"探测器水平中心: {(optimized_params[0]):.6f}")\n')
+                f.write('print(f"探测器垂直中心: {(optimized_params[1]):.6f}")\n')
                 f.write('print(f"探测器sdd: {(optimized_params[2] + optimized_params[3]):.6f}")\n')
                 f.write('print(f"探测器sod: {optimized_params[2]:.6f}")\n')
                 f.write('print(f"探测器水平方向偏移量: {(optimized_params[1] - (numRows - 1) / 2.0):.6f}")\n')
