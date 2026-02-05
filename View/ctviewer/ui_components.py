@@ -193,9 +193,6 @@ class UIComponents:
           
         # 滤波菜单
         filter_menu = self.menu_bar.addMenu("滤波")
-        aniso_action = QtWidgets.QAction("各向异性平滑", self)
-        aniso_action.triggered.connect(self.apply_anisotropic_filter)
-        filter_menu.addAction(aniso_action)
         
         curvature_action = QtWidgets.QAction("曲率流去噪", self)
         curvature_action.triggered.connect(self.apply_curvature_flow_filter)
@@ -215,9 +212,6 @@ class UIComponents:
         
         # CT重建菜单
         ct_menu = self.menu_bar.addMenu("CT重建")
-        ball_phantom_action = QtWidgets.QAction("多球标定", self)
-        ball_phantom_action.triggered.connect(self.run_ball_phantom_calibration)
-        ct_menu.addAction(ball_phantom_action)
         
         helical_ct_action = QtWidgets.QAction("CT螺旋重建", self)
         helical_ct_action.triggered.connect(self.run_helical_ct_reconstruction)

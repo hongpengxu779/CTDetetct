@@ -12,51 +12,12 @@ from Traditional.Filter.bilateral_filter_dialog import BilateralFilterDialog
 
 class FilterOperations:
     """滤波操作类，作为Mixin使用"""
-    
+
     def apply_anisotropic_filter(self):
-        """应用各向异性平滑滤波"""
-        if not hasattr(self, 'array') or self.array is None:
-            QtWidgets.QMessageBox.warning(self, "警告", "请先加载数据")
-            return
-            
-        try:
-            # 创建滤波器对象
-            filter_op = Filter_op()
-            
-            # 创建进度对话框
-            progress = QtWidgets.QProgressDialog("应用各向异性平滑滤波...", "取消", 0, 0, self)
-            progress.setWindowModality(QtCore.Qt.WindowModal)
-            progress.show()
-            QtWidgets.QApplication.processEvents()
-              
-            # 调用滤波函数
-            filtered_array = filter_op.apply_anisotropic_filter(
-                self.array, 
-                spacing=self.spacing
-            )
-            
-            # 关闭进度对话框
-            progress.close()
-            
-            if filtered_array is not None:
-                # 更新当前数组
-                self.array = filtered_array
-                
-                # 显示成功消息
-                QtWidgets.QMessageBox.information(self, "成功", "滤波处理完成，正在更新视图...")
-                QtWidgets.QApplication.processEvents()
-                
-                # 更新视图
-                self.update_viewers()
-                
-                # 通知用户完成
-                QtWidgets.QMessageBox.information(self, "成功", "视图已更新")
-            else:
-                QtWidgets.QMessageBox.warning(self, "警告", "滤波处理未返回结果")
-            
-        except Exception as e:
-            QtWidgets.QMessageBox.critical(self, "错误", f"应用滤波时出错：{str(e)}")
-    
+        """各向异性平滑已移除（保留占位以兼容旧调用）"""
+        QtWidgets.QMessageBox.information(self, "提示", "“各向异性平滑”功能已移除。")
+        return
+
     def apply_curvature_flow_filter(self):
         """应用曲率流去噪滤波"""
         if not hasattr(self, 'array') or self.array is None:

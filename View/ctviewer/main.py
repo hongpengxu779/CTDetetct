@@ -26,11 +26,11 @@ class CTViewer4(QtWidgets.QMainWindow, UIComponents, WindowLevelControl,
     - 右上：Sagittal（矢状面）切片 + 滑动条
     - 左下：Coronal（冠状面）切片 + 滑动条
     - 右下：VTK 三维体渲染窗口
-    
+
     功能菜单：
     - 文件操作：导入文件
-    - 滤波：各向异性平滑、曲率流去噪
-    - CT重建：多球标定、CT螺旋重建、CT圆轨迹
+    - 滤波：曲率流去噪
+    - CT重建：CT螺旋重建、CT圆轨迹
     - 传统分割检测：区域生长、OTSU阈值分割
     - 人工智能分割：基线方法
     - 配准（占位）
