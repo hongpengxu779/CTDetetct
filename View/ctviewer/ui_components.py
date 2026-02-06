@@ -249,6 +249,31 @@ class UIComponents:
         angle_action = QtWidgets.QAction("三点测角度", self)
         angle_action.triggered.connect(self.measure_angle)
         measure_menu.addAction(angle_action)
+
+        # 投影菜单（MIP / MinIP）
+        proj_menu = self.menu_bar.addMenu("投影")
+
+        mip_menu = proj_menu.addMenu("最大密度投影 (MIP)")
+        mip_z = QtWidgets.QAction("沿 Z 轴 (Axial)", self)
+        mip_z.triggered.connect(lambda: self.create_mip_projection(axis=0, use_roi=True))
+        mip_menu.addAction(mip_z)
+        mip_y = QtWidgets.QAction("沿 Y 轴 (Coronal)", self)
+        mip_y.triggered.connect(lambda: self.create_mip_projection(axis=1, use_roi=True))
+        mip_menu.addAction(mip_y)
+        mip_x = QtWidgets.QAction("沿 X 轴 (Sagittal)", self)
+        mip_x.triggered.connect(lambda: self.create_mip_projection(axis=2, use_roi=True))
+        mip_menu.addAction(mip_x)
+
+        minip_menu = proj_menu.addMenu("最小密度投影 (MinIP)")
+        minip_z = QtWidgets.QAction("沿 Z 轴 (Axial)", self)
+        minip_z.triggered.connect(lambda: self.create_minip_projection(axis=0, use_roi=True))
+        minip_menu.addAction(minip_z)
+        minip_y = QtWidgets.QAction("沿 Y 轴 (Coronal)", self)
+        minip_y.triggered.connect(lambda: self.create_minip_projection(axis=1, use_roi=True))
+        minip_menu.addAction(minip_y)
+        minip_x = QtWidgets.QAction("沿 X 轴 (Sagittal)", self)
+        minip_x.triggered.connect(lambda: self.create_minip_projection(axis=2, use_roi=True))
+        minip_menu.addAction(minip_x)
         
         # 使用QMainWindow的setMenuBar方法，菜单栏会自动显示在窗口顶部
         self.setMenuBar(self.menu_bar)
@@ -1090,10 +1115,10 @@ class UIComponents:
             # 清除现有视图
             self.clear_viewers()
             
-            # 恢复数据
-            self.image = data_item['image']
+            # 恢复数据（派生数据可能不包含SimpleITK image）
+            self.image = data_item.get('image', None)
             self.array = data_item['array']
-            self.depth_z, self.depth_y, self.depth_x = data_item['shape']
+            self.depth_z, self.depth_y, self.depth_x = data_item.get('shape', self.array.shape)
             self.spacing = data_item['spacing']
             
             # 如果有RGB数组，也恢复
