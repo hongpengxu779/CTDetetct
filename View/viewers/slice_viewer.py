@@ -149,6 +149,9 @@ class SliceViewer(QtWidgets.QWidget):
         
         # 安装事件过滤器以处理鼠标事件
         self.view.viewport().installEventFilter(self)
+        # 启用鼠标跟踪，使 MouseMove 在无按钮按下时也能触发
+        self.view.setMouseTracking(True)
+        self.view.viewport().setMouseTracking(True)
     
     def _update_zoom_button_position(self):
         """更新放大按钮位置到视图右上角"""
@@ -376,9 +379,73 @@ class SliceViewer(QtWidgets.QWidget):
                 if event.type() == QtCore.QEvent.MouseButtonPress:
                     if event.button() == QtCore.Qt.RightButton:
                         return self.handle_right_click(event)
+
+            # ---- 通用：鼠标移动时更新状态栏坐标/灰度 ----
+            if event.type() == QtCore.QEvent.MouseMove:
+                self._update_pixel_info(event.pos())
+            elif event.type() == QtCore.QEvent.Leave:
+                self._clear_pixel_info()
         
         return super().eventFilter(obj, event)
-        
+
+    # ------------------------------------------------------------------ 坐标/灰度实时显示
+    def _update_pixel_info(self, viewport_pos):
+        """鼠标移动时更新状态栏：显示像素坐标和原始灰度值（轻量级）"""
+        if not self.parent_viewer:
+            return
+
+        scene_pos = self.view.mapToScene(viewport_pos)
+        px = int(scene_pos.x())
+        py = int(scene_pos.y())
+
+        # 快速边界检查（pixmap）
+        pixmap = self.pixmap_item.pixmap()
+        if pixmap is None or pixmap.isNull():
+            return
+        if px < 0 or px >= pixmap.width() or py < 0 or py >= pixmap.height():
+            self._clear_pixel_info()
+            return
+
+        # 获取原始 3D 体素坐标与灰度值
+        arr = getattr(self.parent_viewer, 'array', None)
+        if arr is None:
+            return
+
+        slice_idx = self.slider.value()
+
+        # 根据视图类型映射到 (z, y, x)
+        if self.view_type == "axial":
+            z, y, x = slice_idx, py, px
+        elif self.view_type == "sagittal":
+            z, y, x = py, px, slice_idx
+        elif self.view_type == "coronal":
+            z, y, x = py, slice_idx, px
+        else:
+            return
+
+        # 3D 边界校验
+        if not (0 <= z < arr.shape[0] and 0 <= y < arr.shape[1] and 0 <= x < arr.shape[2]):
+            self._clear_pixel_info()
+            return
+
+        val = arr[z, y, x]
+
+        # 更新状态栏
+        status = getattr(self.parent_viewer, 'status_label', None)
+        if status is not None:
+            status.setText(
+                f"{self.title}  |  像素({px}, {py})  "
+                f"体素(z={z}, y={y}, x={x})  "
+                f"灰度值={val}"
+            )
+
+    def _clear_pixel_info(self):
+        """鼠标离开图像区域时清除坐标显示"""
+        if self.parent_viewer:
+            status = getattr(self.parent_viewer, 'status_label', None)
+            if status is not None:
+                status.setText("准备就绪")
+
     def handle_right_click(self, event):
         """处理右键点击事件，显示上下文菜单"""
         scene_pos = self.view.mapToScene(event.pos())

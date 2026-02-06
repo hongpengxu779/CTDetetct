@@ -774,6 +774,14 @@ class UIComponents:
             return
         
         try:
+            # 如果传入 None，清除直方图并返回
+            if data_array is None:
+                self.histogram_ax.clear()
+                self.histogram_ax.set_facecolor('white')
+                self.histogram_figure.patch.set_facecolor('#f5f5f5')
+                self.histogram_canvas.draw_idle()
+                return
+
             from matplotlib.colors import LinearSegmentedColormap
             
             # 清除之前的直方图
@@ -1236,69 +1244,108 @@ class UIComponents:
             QtWidgets.QMessageBox.critical(self, "错误", f"切换数据时出错：{str(e)}")
     
     def remove_selected_data(self):
-        """删除当前选中的数据项（确保单选机制）"""
+        """删除当前高亮（选中行）的数据项"""
         current_item = self.data_list_widget.currentItem()
-        if current_item:
-            reply = QtWidgets.QMessageBox.question(
-                self, '确认删除', 
-                f'确定要删除数据 "{current_item.text()}" 吗？',
-                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-                QtWidgets.QMessageBox.No
-            )
-            
-            if reply == QtWidgets.QMessageBox.Yes:
-                data_name = current_item.text()
-                row = self.data_list_widget.row(current_item)
-                
-                # 临时断开信号
-                try:
-                    self.data_list_widget.itemChanged.disconnect(self.on_data_item_changed)
-                except:
-                    pass
-                
-                # 删除项
-                self.data_list_widget.takeItem(row)
-                print(f"已删除数据: {data_name}")
-                
-                # 如果删除后还有数据，自动选中第一个（单选机制）
-                if self.data_list_widget.count() > 0:
-                    # 确保所有项都未选中
-                    for i in range(self.data_list_widget.count()):
-                        item = self.data_list_widget.item(i)
-                        item.setCheckState(QtCore.Qt.Unchecked)
-                    
-                    # 只选中第一个
-                    first_item = self.data_list_widget.item(0)
-                    first_item.setCheckState(QtCore.Qt.Checked)
-                    
-                    # 重新连接信号
-                    self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
-                    
-                    # 手动触发切换
-                    data_item = first_item.data(QtCore.Qt.UserRole)
-                    self.switch_to_data(data_item, first_item.text())
-                else:
-                    # 重新连接信号
-                    self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
-                    
-                    # 没有数据了，清除视图
-                    self.clear_viewers()
-                    print("列表已空，已清除所有视图")
-    
+        if current_item is None:
+            QtWidgets.QMessageBox.information(self, "提示", "请先在数据列表中选中要删除的项。")
+            return
+
+        data_name = current_item.text()
+        is_checked = current_item.checkState() == QtCore.Qt.Checked  # 是否正在显示
+
+        reply = QtWidgets.QMessageBox.question(
+            self, '确认删除',
+            f'确定要删除数据 "{data_name}" 吗？',
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No
+        )
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+
+        row = self.data_list_widget.row(current_item)
+
+        # 临时断开信号
+        try:
+            self.data_list_widget.itemChanged.disconnect(self.on_data_item_changed)
+        except:
+            pass
+
+        # 删除项
+        self.data_list_widget.takeItem(row)
+        print(f"已删除数据: {data_name}")
+
+        remaining = self.data_list_widget.count()
+
+        if remaining > 0 and is_checked:
+            # 删除的是当前显示的数据 → 自动切换到第一个
+            for i in range(remaining):
+                self.data_list_widget.item(i).setCheckState(QtCore.Qt.Unchecked)
+            first_item = self.data_list_widget.item(0)
+            first_item.setCheckState(QtCore.Qt.Checked)
+            self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
+            data_item = first_item.data(QtCore.Qt.UserRole)
+            self.switch_to_data(data_item, first_item.text())
+        elif remaining > 0:
+            # 删除的不是当前显示的数据 → 无需切换
+            self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
+        else:
+            # 列表已空 → 清理全部状态
+            self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
+            self._reset_after_all_data_removed()
+
     def clear_all_data(self):
         """清空所有数据"""
         if self.data_list_widget.count() == 0:
             return
-        
+
         reply = QtWidgets.QMessageBox.question(
-            self, '确认清空', 
+            self, '确认清空',
             '确定要清空所有数据吗？',
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
             QtWidgets.QMessageBox.No
         )
-        
-        if reply == QtWidgets.QMessageBox.Yes:
-            self.data_list_widget.clear()
-            self.clear_viewers()
-            print("已清空所有数据")
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+
+        try:
+            self.data_list_widget.itemChanged.disconnect(self.on_data_item_changed)
+        except:
+            pass
+
+        self.data_list_widget.clear()
+
+        self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
+        self._reset_after_all_data_removed()
+        print("已清空所有数据")
+
+    def _reset_after_all_data_removed(self):
+        """列表清空后，重置所有关联状态"""
+        # 清除种子点
+        if hasattr(self, 'clear_region_growing_seed_points'):
+            self.clear_region_growing_seed_points()
+
+        # 清除视图
+        self.clear_viewers()
+
+        # 重置数据变量
+        self.image = None
+        self.array = None
+        self.raw_array = None
+        self.rgb_array = None
+
+        # 重置窗口标题
+        self.setWindowTitle("工业CT智能软件")
+
+        # 清除灰度直方图
+        if hasattr(self, 'update_histogram'):
+            try:
+                self.update_histogram(None)
+            except:
+                pass
+
+        # 清除状态栏统计信息
+        if hasattr(self, 'status_label'):
+            self.status_label.setText("")
+
+        print("所有数据已移除，状态已重置")
 
