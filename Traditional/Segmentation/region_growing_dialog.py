@@ -5,15 +5,28 @@ from PyQt5 import QtWidgets, QtCore
 
 
 class RegionGrowingDialog(QtWidgets.QDialog):
-    """区域生长对话框 - 用于获取区域生长的参数"""
+    """区域生长对话框 - 用于获取区域生长的参数
+    
+    改进的工作流：
+    - 点击"从主界面选择种子点"时对话框最小化而非关闭
+    - 在主界面右键添加种子点后，对话框实时更新显示
+    - 用户可随时切换回对话框继续操作
+    """
     
     def __init__(self, parent=None, current_data=None):
         super().__init__(parent)
-        self.parent = parent
+        self.parent_viewer = parent
         self.current_data = current_data  # 当前已加载的数据
         self.setWindowTitle("传统分割检测 - 区域生长")
         self.setMinimumWidth(650)
         self.setMinimumHeight(500)
+        
+        # 允许对话框最小化（添加窗口按钮）
+        self.setWindowFlags(
+            self.windowFlags()
+            | QtCore.Qt.WindowMinimizeButtonHint
+            | QtCore.Qt.WindowMaximizeButtonHint
+        )
         
         # 结果变量
         self.use_current_data = True  # 默认使用当前数据
@@ -23,6 +36,7 @@ class RegionGrowingDialog(QtWidgets.QDialog):
         self.multiplier = 2.5
         self.number_of_iterations = 5
         self.replace_value = 255
+        self._is_selecting_seeds = False  # 是否正在选择种子点
         
         # 创建主布局
         main_layout = QtWidgets.QVBoxLayout(self)
@@ -67,24 +81,42 @@ class RegionGrowingDialog(QtWidgets.QDialog):
         
         self.seed_display = QtWidgets.QTextEdit()
         self.seed_display.setReadOnly(True)
-        self.seed_display.setMaximumHeight(80)
-        self.seed_display.setPlaceholderText("点击下方按钮后，在主界面右键点击选择种子点\n可以选择多个种子点")
+        self.seed_display.setMaximumHeight(100)
+        self.seed_display.setPlaceholderText(
+            "点击下方按钮后，在主界面切片视图中右键点击选择种子点\n"
+            "可以选择多个种子点，对话框会实时更新"
+        )
         seed_layout.addWidget(self.seed_display)
         
         # 添加种子点操作按钮
         seed_button_layout = QtWidgets.QHBoxLayout()
         
-        self.select_seed_btn = QtWidgets.QPushButton("从主界面选择种子点")
-        self.select_seed_btn.setStyleSheet("QPushButton { background-color: #E8F5E9; color: #2E7D32; }")
+        self.select_seed_btn = QtWidgets.QPushButton("📌 从主界面选择种子点")
+        self.select_seed_btn.setStyleSheet(
+            "QPushButton { background-color: #E8F5E9; color: #2E7D32; font-weight: bold; padding: 6px; }"
+            "QPushButton:hover { background-color: #C8E6C9; }"
+        )
         self.select_seed_btn.clicked.connect(self.start_seed_selection)
         seed_button_layout.addWidget(self.select_seed_btn)
         
-        self.clear_seed_btn = QtWidgets.QPushButton("清除种子点")
-        self.clear_seed_btn.setStyleSheet("QPushButton { background-color: #FFEBEE; color: #C62828; }")
+        self.clear_seed_btn = QtWidgets.QPushButton("🗑 清除种子点")
+        self.clear_seed_btn.setStyleSheet(
+            "QPushButton { background-color: #FFEBEE; color: #C62828; padding: 6px; }"
+            "QPushButton:hover { background-color: #FFCDD2; }"
+        )
         self.clear_seed_btn.clicked.connect(self.clear_seeds)
         seed_button_layout.addWidget(self.clear_seed_btn)
         
         seed_layout.addLayout(seed_button_layout)
+        
+        # 种子点选择模式提示
+        self.seed_mode_label = QtWidgets.QLabel("")
+        self.seed_mode_label.setStyleSheet(
+            "color: #FF6F00; font-weight: bold; padding: 4px; "
+            "background-color: #FFF8E1; border-radius: 3px;"
+        )
+        self.seed_mode_label.setVisible(False)
+        seed_layout.addWidget(self.seed_mode_label)
         
         seed_widget = QtWidgets.QWidget()
         seed_widget.setLayout(seed_layout)
@@ -219,7 +251,6 @@ class RegionGrowingDialog(QtWidgets.QDialog):
         algorithm_name = self.algorithm_combo.currentText()
         
         if "ConnectedThreshold" in algorithm_name:
-            # 连通阈值算法
             self.lower_threshold_input.setEnabled(True)
             self.upper_threshold_input.setEnabled(True)
             self.multiplier_input.setEnabled(False)
@@ -233,7 +264,6 @@ class RegionGrowingDialog(QtWidgets.QDialog):
                 "• 推荐先观察直方图确定合适的阈值范围"
             )
         elif "ConfidenceConnected" in algorithm_name:
-            # 置信连接算法
             self.lower_threshold_input.setEnabled(False)
             self.upper_threshold_input.setEnabled(False)
             self.multiplier_input.setEnabled(True)
@@ -247,7 +277,6 @@ class RegionGrowingDialog(QtWidgets.QDialog):
                 "• 倍增因子越大，分割区域越大；迭代次数越多，边界越精细"
             )
         else:  # NeighborhoodConnected
-            # 邻域连接算法
             self.lower_threshold_input.setEnabled(True)
             self.upper_threshold_input.setEnabled(True)
             self.multiplier_input.setEnabled(False)
@@ -262,8 +291,14 @@ class RegionGrowingDialog(QtWidgets.QDialog):
             )
     
     def set_seed_points(self, seed_points):
-        """设置种子点（从主界面调用）"""
-        self.seed_points = seed_points
+        """设置种子点（从主界面或 slice_viewer 实时调用）
+        
+        参数
+        ----
+        seed_points : list
+            种子点列表，每个元素为 (z, y, x) 元组
+        """
+        self.seed_points = list(seed_points)
         self.update_seed_display()
     
     def update_seed_display(self):
@@ -271,40 +306,80 @@ class RegionGrowingDialog(QtWidgets.QDialog):
         if self.seed_points:
             seed_text = f"已设置 {len(self.seed_points)} 个种子点:\n"
             for i, point in enumerate(self.seed_points):
-                seed_text += f"  点{i+1}: {point}\n"
+                seed_text += f"  点{i+1}: (z={point[0]}, y={point[1]}, x={point[2]})\n"
             self.seed_display.setText(seed_text)
+            
+            # 如果正在选择模式，更新提示
+            if self._is_selecting_seeds:
+                self.seed_mode_label.setText(
+                    f"🔴 种子点选择中... 已选 {len(self.seed_points)} 个 | "
+                    f"在主界面右键继续添加，完成后点击此窗口"
+                )
         else:
             self.seed_display.clear()
     
     def start_seed_selection(self):
-        """开始选择种子点"""
-        # 临时隐藏对话框
-        self.hide()
+        """开始选择种子点 — 最小化对话框而非关闭"""
+        self._is_selecting_seeds = True
         
-        # 显示提示消息
-        QtWidgets.QMessageBox.information(
-            self.parent,
-            "选择种子点",
-            "请在主界面的切片视图中右键点击选择种子点。\n\n"
-            "选择完成后，请点击\"传统分割检测\" -> \"区域生长\"菜单重新打开此对话框。\n\n"
-            "提示：\n"
-            "• 在任意切片视图（Axial/Sagittal/Coronal）中右键点击\n"
-            "• 选择\"添加区域生长种子点\"\n"
-            "• 可以添加多个种子点\n"
-            "• 右键菜单中也可以清除所有种子点"
+        # 更新UI提示
+        self.seed_mode_label.setText(
+            "🔴 种子点选择模式已开启 | 在主界面切片视图中右键点击添加种子点"
+        )
+        self.seed_mode_label.setVisible(True)
+        self.select_seed_btn.setText("📌 继续选择种子点...")
+        self.select_seed_btn.setStyleSheet(
+            "QPushButton { background-color: #FFF3E0; color: #E65100; font-weight: bold; padding: 6px; }"
+            "QPushButton:hover { background-color: #FFE0B2; }"
         )
         
-        # 关闭对话框，让用户回到主界面选择种子点
-        self.reject()
+        # 在主界面状态栏提示
+        if self.parent_viewer and hasattr(self.parent_viewer, 'status_label'):
+            self.parent_viewer.status_label.setText(
+                "📌 种子点选择模式：在切片视图中右键点击 → 选择\"添加区域生长种子点\" | "
+                "完成后切换回区域生长对话框"
+            )
+        
+        # 最小化对话框而不是关闭，这样用户可以方便地切换回来
+        self.showMinimized()
+    
+    def changeEvent(self, event):
+        """处理窗口状态变化事件"""
+        super().changeEvent(event)
+        if event.type() == QtCore.QEvent.WindowStateChange:
+            # 当对话框从最小化恢复时
+            if not self.isMinimized() and self._is_selecting_seeds:
+                self._is_selecting_seeds = False
+                self.select_seed_btn.setText("📌 从主界面选择种子点")
+                self.select_seed_btn.setStyleSheet(
+                    "QPushButton { background-color: #E8F5E9; color: #2E7D32; font-weight: bold; padding: 6px; }"
+                    "QPushButton:hover { background-color: #C8E6C9; }"
+                )
+                
+                # 从父窗口同步最新的种子点
+                if self.parent_viewer and hasattr(self.parent_viewer, 'region_growing_seed_points'):
+                    self.set_seed_points(self.parent_viewer.region_growing_seed_points)
+                
+                if self.seed_points:
+                    self.seed_mode_label.setText(
+                        f"✅ 已完成选择，共 {len(self.seed_points)} 个种子点"
+                    )
+                    self.seed_mode_label.setStyleSheet(
+                        "color: #2E7D32; font-weight: bold; padding: 4px; "
+                        "background-color: #E8F5E9; border-radius: 3px;"
+                    )
+                else:
+                    self.seed_mode_label.setVisible(False)
     
     def clear_seeds(self):
         """清除所有种子点"""
         self.seed_points = []
         self.update_seed_display()
+        self.seed_mode_label.setVisible(False)
         
-        # 同时清除主界面的种子点
-        if self.parent and hasattr(self.parent, 'clear_region_growing_seed_points'):
-            self.parent.clear_region_growing_seed_points()
+        # 同时清除主界面的种子点和标记
+        if self.parent_viewer and hasattr(self.parent_viewer, 'clear_region_growing_seed_points'):
+            self.parent_viewer.clear_region_growing_seed_points()
         
         QtWidgets.QMessageBox.information(self, "已清除", "所有种子点已清除")
     
@@ -319,12 +394,18 @@ class RegionGrowingDialog(QtWidgets.QDialog):
             )
             return
         
+        # 从父窗口同步最新的种子点（确保拿到最新的）
+        if self.parent_viewer and hasattr(self.parent_viewer, 'region_growing_seed_points'):
+            self.seed_points = list(self.parent_viewer.region_growing_seed_points)
+        
         # 检查种子点
         if not self.seed_points or len(self.seed_points) == 0:
             QtWidgets.QMessageBox.warning(
                 self,
                 "输入错误",
-                "请先设置种子点！\n\n在主界面的切片视图中右键点击选择种子点。"
+                "请先设置种子点！\n\n"
+                "点击\"从主界面选择种子点\"按钮，\n"
+                "然后在切片视图中右键点击选择种子点。"
             )
             return
         

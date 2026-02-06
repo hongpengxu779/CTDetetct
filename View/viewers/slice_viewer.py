@@ -199,6 +199,9 @@ class SliceViewer(QtWidgets.QWidget):
         # 重绘测量线
         self.redraw_measurement_lines()
         
+        # 更新种子点标记的可见性（只显示当前切片的种子点）
+        self._update_seed_marks_visibility(idx)
+        
         # 如果在测量模式下，通知父控制器更新其他视图中的对应线段
         if self.measurement_mode and hasattr(self, 'parent_controller') and self.parent_controller:
             # 获取当前视图中的所有测量线段
@@ -431,33 +434,61 @@ class SliceViewer(QtWidgets.QWidget):
         if not self.parent_viewer:
             return
         
-        # 将场景坐标转换为图像坐标
+        # 将场景坐标转换为图像坐标（取整，mapToScene 返回浮点数）
         x = int(scene_pos.x())
         y = int(scene_pos.y())
         
         # 获取当前切片索引
         current_slice = self.slider.value()
         
-        # 根据视图类型确定3D坐标
-        # 需要知道这是哪个视图（Axial, Sagittal, Coronal）
+        # ---- 边界检查：确保点击位置在 pixmap 范围内 ----
+        pixmap = self.pixmap_item.pixmap()
+        if pixmap is None or pixmap.isNull():
+            print("警告：当前没有有效的图像，无法添加种子点")
+            return
+        
+        img_w = pixmap.width()
+        img_h = pixmap.height()
+        if x < 0 or x >= img_w or y < 0 or y >= img_h:
+            print(f"警告：点击位置 ({x}, {y}) 超出图像范围 ({img_w}x{img_h})，已忽略")
+            if hasattr(self.parent_viewer, 'status_label'):
+                self.parent_viewer.status_label.setText(
+                    f"⚠ 点击位置超出图像范围，请点击图像内部区域"
+                )
+            return
+        
+        # ---- 根据视图类型确定 3D 坐标 (z, y, x) ----
+        # 数组布局: self.array[Z, Y, X]
+        # Axial   切片 array[z,:,:]   → pixmap(Y, X)  scene_x=X, scene_y=Y
+        # Sagittal切片 array[:,:,x]   → pixmap(Z, Y)  scene_x=Y, scene_y=Z
+        # Coronal 切片 array[:,y,:]   → pixmap(Z, X)  scene_x=X, scene_y=Z
         if "Axial" in self.title:
-            # Axial视图: z = current_slice, y = y, x = x
-            seed_point = (current_slice, y, x)
+            seed_point = (current_slice, y, x)       # (z, y, x)
         elif "Sagittal" in self.title:
-            # Sagittal视图: z = y, y = x, x = current_slice
-            seed_point = (y, x, current_slice)
+            seed_point = (y, x, current_slice)       # (z=scene_y, y=scene_x, x=slice)
         elif "Coronal" in self.title:
-            # Coronal视图: z = y, y = current_slice, x = x
-            seed_point = (y, current_slice, x)
+            seed_point = (y, current_slice, x)       # (z=scene_y, y=slice, x=scene_x)
         else:
             seed_point = (current_slice, y, x)
+        
+        # ---- 进一步验证 3D 坐标是否在数据体积范围内 ----
+        if self.parent_viewer and hasattr(self.parent_viewer, 'array') and self.parent_viewer.array is not None:
+            arr_shape = self.parent_viewer.array.shape  # (Z, Y, X)
+            sz, sy, sx = seed_point
+            if not (0 <= sz < arr_shape[0] and 0 <= sy < arr_shape[1] and 0 <= sx < arr_shape[2]):
+                print(f"警告：种子点 {seed_point} 超出数据范围 {arr_shape}，已忽略")
+                if hasattr(self.parent_viewer, 'status_label'):
+                    self.parent_viewer.status_label.setText(
+                        f"⚠ 种子点坐标超出数据范围 {arr_shape}，请重新选择"
+                    )
+                return
         
         # 添加到父窗口的种子点列表
         if hasattr(self.parent_viewer, 'add_region_growing_seed_point'):
             self.parent_viewer.add_region_growing_seed_point(seed_point)
             
-            # 在图像上标记种子点
-            self.mark_seed_point(scene_pos)
+            # 在图像上标记种子点（同时记录所属切片用于显隐控制）
+            self.mark_seed_point(scene_pos, current_slice)
             
             # 在状态栏显示简洁提示（如果父窗口有状态栏）
             if hasattr(self.parent_viewer, 'status_label'):
@@ -467,10 +498,28 @@ class SliceViewer(QtWidgets.QWidget):
                     f"继续右键添加更多，或在菜单选择\"传统分割检测\" -> \"区域生长\"开始分割"
                 )
             
+            # 通知区域生长对话框（如果打开了的话）实时刷新
+            if hasattr(self.parent_viewer, '_region_growing_dialog') and self.parent_viewer._region_growing_dialog is not None:
+                try:
+                    dlg = self.parent_viewer._region_growing_dialog
+                    if dlg.isVisible():
+                        dlg.set_seed_points(self.parent_viewer.region_growing_seed_points)
+                except RuntimeError:
+                    # 对话框可能已被销毁
+                    self.parent_viewer._region_growing_dialog = None
+            
             print(f"种子点已添加: {seed_point} (在 {self.title} 视图，切片 {current_slice})")
     
-    def mark_seed_point(self, pos):
-        """在图像上标记种子点"""
+    def mark_seed_point(self, pos, slice_index=None):
+        """在图像上标记种子点
+        
+        参数
+        ----
+        pos : QPointF
+            场景坐标
+        slice_index : int, optional
+            种子点所在的切片索引，用于切换切片时控制显隐
+        """
         # 创建一个十字标记
         pen = QtGui.QPen(QtCore.Qt.red, 2)
         
@@ -482,10 +531,34 @@ class SliceViewer(QtWidgets.QWidget):
         # 绘制小圆圈
         circle = self.scene.addEllipse(pos.x() - 3, pos.y() - 3, 6, 6, pen)
         
-        # 保存标记引用（用于后续清除）
+        # 保存标记引用（用于后续清除和显隐控制）
         if not hasattr(self, 'seed_point_marks'):
             self.seed_point_marks = []
-        self.seed_point_marks.append((h_line, v_line, circle))
+        self.seed_point_marks.append((h_line, v_line, circle, slice_index))
+    
+    def _update_seed_marks_visibility(self, current_slice_idx):
+        """根据当前切片索引更新种子点标记的可见性
+        
+        只显示属于当前切片的种子点，其他切片的种子点隐藏。
+        
+        参数
+        ----
+        current_slice_idx : int
+            当前切片索引
+        """
+        if not hasattr(self, 'seed_point_marks'):
+            return
+        
+        for mark in self.seed_point_marks:
+            if len(mark) == 4:
+                h_line, v_line, circle, slice_idx = mark
+                visible = (slice_idx is None or slice_idx == current_slice_idx)
+                h_line.setVisible(visible)
+                v_line.setVisible(visible)
+                circle.setVisible(visible)
+            else:
+                # 旧格式兼容（无 slice_index），始终显示
+                pass
     
     def clear_all_seed_points(self):
         """清除所有种子点"""
@@ -511,11 +584,12 @@ class SliceViewer(QtWidgets.QWidget):
                       self.parent_viewer.sag_viewer, 
                       self.parent_viewer.cor_viewer]:
             if viewer and hasattr(viewer, 'seed_point_marks'):
-                for h_line, v_line, circle in viewer.seed_point_marks:
+                for mark in viewer.seed_point_marks:
                     try:
-                        viewer.scene.removeItem(h_line)
-                        viewer.scene.removeItem(v_line)
-                        viewer.scene.removeItem(circle)
+                        # 支持 3-tuple (旧) 和 4-tuple (新) 格式
+                        items = mark[:3]  # h_line, v_line, circle
+                        for item in items:
+                            viewer.scene.removeItem(item)
                     except:
                         pass
                 viewer.seed_point_marks = []

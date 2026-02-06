@@ -11,6 +11,7 @@ from PyQt5 import QtWidgets, QtCore
 
 from Traditional.Segmentation.region_growing_dialog import RegionGrowingDialog
 from Traditional.Segmentation.otsu_segmentation_dialog import OtsuSegmentationDialog
+from Traditional.Segmentation.threshold_segmentation_dialog import ThresholdSegmentationDialog
 from AISegmeant.image_overlay import create_overlay_from_files, create_multi_label_overlay_from_files
 
 
@@ -21,14 +22,27 @@ class TraditionalSegmentationOperations:
         """初始化"""
         self.region_growing_seed_points = []  # 存储种子点
         self.last_otsu_threshold = None  # 存储上次OTSU计算的阈值
+        self._region_growing_dialog = None  # 区域生长对话框引用
     
     def run_region_growing(self):
         """运行区域生长分割"""
         try:
+            # 检查是否有 SimpleITK 图像（区域生长需要 SimpleITK Image）
+            if not hasattr(self, 'image') or self.image is None:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "数据不可用",
+                    "当前没有可用的 SimpleITK 图像数据。\n\n"
+                    "可能的原因：\n"
+                    "• 尚未加载任何数据\n"
+                    "• 当前显示的是投影结果等派生数据\n\n"
+                    "请先加载原始 CT 数据再执行区域生长。"
+                )
+                return
+            
             # 准备当前数据
             current_data = None
-            if hasattr(self, 'image') and self.image is not None and hasattr(self, 'array') and self.array is not None:
-                # 包含图像和数组数据
+            if hasattr(self, 'array') and self.array is not None:
                 current_data = {
                     'image': self.image,
                     'array': self.array,
@@ -37,6 +51,9 @@ class TraditionalSegmentationOperations:
             
             # 创建区域生长对话框，传递当前数据
             dialog = RegionGrowingDialog(self, current_data=current_data)
+            
+            # 保存对话框引用，以便 slice_viewer 实时更新种子点
+            self._region_growing_dialog = dialog
             
             # 如果已经有种子点，设置到对话框中
             if hasattr(self, 'region_growing_seed_points') and self.region_growing_seed_points:
@@ -174,7 +191,11 @@ class TraditionalSegmentationOperations:
                         f"3. 输入数据是否有效"
                     )
             
+            # 对话框关闭后清除引用
+            self._region_growing_dialog = None
+            
         except Exception as e:
+            self._region_growing_dialog = None
             import traceback
             traceback.print_exc()
             QtWidgets.QMessageBox.critical(self, "错误", f"运行区域生长分割时出错：{str(e)}")
@@ -197,11 +218,12 @@ class TraditionalSegmentationOperations:
         algorithm = params['algorithm']
         seed_points = params['seed_points']
         
-        # 转换种子点格式 - 从numpy数组索引(z, y, x)转换为ITK物理坐标
+        # 转换种子点格式 - 从numpy数组索引(z, y, x)转换为SimpleITK索引(x, y, z)
+        # 注意：SimpleITK的SetSeedList()接受的是索引坐标（index），不是物理坐标
         seed_list = []
         for seed in seed_points:
-            # seed是(z, y, x)格式的数组索引
-            # ITK期望(x, y, z)格式的索引
+            # seed是(z, y, x)格式的numpy数组索引
+            # SimpleITK期望(x, y, z)格式的索引
             if len(seed) == 3:
                 # 转换为ITK索引格式 (x, y, z)
                 itk_seed = [int(seed[2]), int(seed[1]), int(seed[0])]
@@ -280,7 +302,6 @@ class TraditionalSegmentationOperations:
         if hasattr(self, 'region_growing_seed_points'):
             self.region_growing_seed_points = []
             print("已清除所有种子点")
-        
         # 清除所有视图中的种子点标记
         self._clear_seed_marks_from_all_viewers()
     
@@ -290,11 +311,11 @@ class TraditionalSegmentationOperations:
                       getattr(self, 'sag_viewer', None), 
                       getattr(self, 'cor_viewer', None)]:
             if viewer and hasattr(viewer, 'seed_point_marks'):
-                for h_line, v_line, circle in viewer.seed_point_marks:
+                for mark in viewer.seed_point_marks:
                     try:
-                        viewer.scene.removeItem(h_line)
-                        viewer.scene.removeItem(v_line)
-                        viewer.scene.removeItem(circle)
+                        items = mark[:3]  # h_line, v_line, circle
+                        for item in items:
+                            viewer.scene.removeItem(item)
                     except:
                         pass
                 viewer.seed_point_marks = []
@@ -347,7 +368,7 @@ class TraditionalSegmentationOperations:
                         
                         # 将标签值映射到0, 255, 510, 765...（间隔255）
                         # 这样在灰度图中可以清晰看到不同的标签
-                        mapped_array = np.zeros_like(label_array, dtype=np.uint16)
+                        mapped_array = np.zeros像(label_array, dtype=np.uint16)
                         for i, label in enumerate(unique_labels):
                             if label > 0:  # 跳过背景
                                 mapped_array[label_array == label] = i * 255
@@ -576,5 +597,159 @@ class TraditionalSegmentationOperations:
         
         print("OTSU分割执行完成")
         
+        return result_image
+
+    # ====================================================================
+    # 阈值分割
+    # ====================================================================
+    def run_threshold_segmentation(self):
+        """运行手动阈值分割"""
+        try:
+            # 检查数据
+            if not hasattr(self, 'array') or self.array is None:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "数据不可用",
+                    "当前没有可用的图像数据。\n请先加载 CT 数据再执行阈值分割。"
+                )
+                return
+
+            current_data = {
+                'image': self.image if hasattr(self, 'image') else None,
+                'array': self.array,
+                'spacing': self.spacing if hasattr(self, 'spacing') else (1.0, 1.0, 1.0),
+            }
+
+            dialog = ThresholdSegmentationDialog(self, current_data=current_data)
+
+            if dialog.exec_() != QtWidgets.QDialog.Accepted:
+                return
+
+            params = dialog.get_parameters()
+
+            # 进度提示
+            progress = QtWidgets.QProgressDialog(
+                "正在进行阈值分割，请稍候...", None, 0, 0, self)
+            progress.setWindowTitle("阈值分割")
+            progress.setWindowModality(QtCore.Qt.WindowModal)
+            progress.show()
+            QtWidgets.QApplication.processEvents()
+
+            try:
+                result_image = self.perform_threshold_segmentation(params)
+
+                # 保存结果
+                temp_dir = tempfile.gettempdir()
+                result_path = os.path.join(temp_dir, "threshold_seg_result.nii.gz")
+                sitk.WriteImage(result_image, result_path)
+
+                progress.close()
+
+                if params['overlay_with_original'] and current_data.get('image') is not None:
+                    try:
+                        overlay_path = os.path.join(temp_dir, "threshold_seg_overlay.nii.gz")
+                        overlay_progress = QtWidgets.QProgressDialog(
+                            "正在创建融合图像...", None, 0, 0, self)
+                        overlay_progress.setWindowTitle("图像融合")
+                        overlay_progress.setWindowModality(QtCore.Qt.WindowModal)
+                        overlay_progress.show()
+                        QtWidgets.QApplication.processEvents()
+
+                        temp_input = tempfile.NamedTemporaryFile(suffix='.nii.gz', delete=False)
+                        temp_input.close()
+                        sitk.WriteImage(current_data['image'], temp_input.name)
+
+                        create_overlay_from_files(
+                            temp_input.name,
+                            result_path,
+                            overlay_path,
+                            color=params['overlay_color'],
+                            alpha=params['overlay_alpha'],
+                        )
+                        os.unlink(temp_input.name)
+                        overlay_progress.close()
+
+                        reply = QtWidgets.QMessageBox.question(
+                            self,
+                            "分割完成",
+                            f"阈值分割完成！\n\n"
+                            f"• 分割结果: {result_path}\n"
+                            f"• 融合图像: {overlay_path}\n\n"
+                            f"选择要加载的图像：\n"
+                            f"- 是(Y)：加载融合图像（推荐）\n"
+                            f"- 否(N)：加载纯分割结果",
+                            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Cancel,
+                        )
+                        if reply == QtWidgets.QMessageBox.Yes:
+                            self.load_data(overlay_path)
+                        elif reply == QtWidgets.QMessageBox.No:
+                            self.load_data(result_path)
+                    except Exception as e:
+                        QtWidgets.QMessageBox.warning(
+                            self, "融合警告",
+                            f"创建融合图像时出错：{str(e)}\n\n将显示纯分割结果")
+                        reply = QtWidgets.QMessageBox.question(
+                            self, "分割完成",
+                            f"阈值分割完成！\n结果已保存到：\n{result_path}\n\n是否加载？",
+                            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+                        if reply == QtWidgets.QMessageBox.Yes:
+                            self.load_data(result_path)
+                else:
+                    reply = QtWidgets.QMessageBox.question(
+                        self, "分割完成",
+                        f"阈值分割完成！\n结果已保存到：\n{result_path}\n\n是否加载分割结果？",
+                        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+                    if reply == QtWidgets.QMessageBox.Yes:
+                        self.load_data(result_path)
+
+            except Exception as e:
+                progress.close()
+                import traceback
+                traceback.print_exc()
+                QtWidgets.QMessageBox.critical(
+                    self, "分割错误",
+                    f"执行阈值分割时出错：{str(e)}")
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(self, "错误", f"运行阈值分割时出错：{str(e)}")
+
+    def perform_threshold_segmentation(self, params):
+        """
+        执行阈值分割（基于 numpy 矢量化操作，高效）
+
+        参数
+        ----
+        params : dict
+            包含 lower_threshold, upper_threshold, foreground_value, background_value, current_data
+
+        返回
+        ----
+        sitk.Image : 二值分割结果
+        """
+        array = params['current_data']['array']
+        lower = params['lower_threshold']
+        upper = params['upper_threshold']
+        fg = params['foreground_value']
+        bg = params['background_value']
+
+        print(f"阈值分割: 模式={params['mode']}, 范围=[{lower:.1f}, {upper:.1f}], 前景={fg}, 背景={bg}")
+
+        # numpy 矢量化操作 — 整个 3D 体数据一步完成
+        mask = (array >= lower) & (array <= upper)
+        result_array = np.where(mask, fg, bg).astype(np.uint16)
+
+        selected = int(mask.sum())
+        print(f"阈值分割完成: 选中体素 {selected:,} / {array.size:,} ({selected/array.size*100:.2f}%)")
+
+        # 转换为 SimpleITK Image 以保留空间信息
+        result_image = sitk.GetImageFromArray(result_array)
+
+        # 如果有原始 SimpleITK 图像，拷贝空间信息
+        src_image = params['current_data'].get('image')
+        if src_image is not None:
+            result_image.CopyInformation(src_image)
+
         return result_image
 

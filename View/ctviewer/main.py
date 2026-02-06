@@ -32,7 +32,7 @@ class CTViewer4(QtWidgets.QMainWindow, UIComponents, WindowLevelControl,
     - 文件操作：导入文件
     - 滤波：曲率流去噪
     - CT重建：CT螺旋重建、CT圆轨迹
-    - 传统分割检测：区域生长、OTSU阈值分割
+    - 传统分割检测：区域生长、OTSU阈值分割、阈值分割
     - 人工智能分割：基线方法
     - 配准（占位）
     """

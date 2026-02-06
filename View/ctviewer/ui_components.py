@@ -231,6 +231,10 @@ class UIComponents:
         otsu_action.triggered.connect(self.run_otsu_segmentation)
         traditional_seg_menu.addAction(otsu_action)
         
+        threshold_action = QtWidgets.QAction("阈值分割", self)
+        threshold_action.triggered.connect(self.run_threshold_segmentation)
+        traditional_seg_menu.addAction(threshold_action)
+        
         # 人工智能分割菜单
         ai_menu = self.menu_bar.addMenu("人工智能分割")
         unet_action = QtWidgets.QAction("基线方法", self)
@@ -1112,6 +1116,10 @@ class UIComponents:
             数据名称
         """
         try:
+            # 切换数据时清除旧的种子点（坐标已不再适用于新数据）
+            if hasattr(self, 'clear_region_growing_seed_points'):
+                self.clear_region_growing_seed_points()
+            
             # 清除现有视图
             self.clear_viewers()
             
