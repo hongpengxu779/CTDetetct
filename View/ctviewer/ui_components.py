@@ -254,6 +254,11 @@ class UIComponents:
         angle_action.triggered.connect(self.measure_angle)
         measure_menu.addAction(angle_action)
 
+        # 表面积测定
+        surface_area_action = QtWidgets.QAction("表面积测定", self)
+        surface_area_action.triggered.connect(self.run_surface_area_measurement)
+        measure_menu.addAction(surface_area_action)
+
         # 投影菜单（MIP / MinIP）
         proj_menu = self.menu_bar.addMenu("投影")
 

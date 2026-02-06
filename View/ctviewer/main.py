@@ -15,12 +15,14 @@ from .ai_operations import AIOperations
 from .measurement_operations import MeasurementOperations
 from .roi_operations import ROIOperations
 from .projection_operations import ProjectionOperations
+from .surface_area_operations import SurfaceAreaOperations
 from Traditional.Segmentation.traditional_segmentation_operations import TraditionalSegmentationOperations
 
 
 class CTViewer4(QtWidgets.QMainWindow, UIComponents, WindowLevelControl, 
                 DataLoader, FilterOperations, CTOperations, AIOperations, 
-                MeasurementOperations, ROIOperations, ProjectionOperations, TraditionalSegmentationOperations):
+                MeasurementOperations, ROIOperations, ProjectionOperations,
+                SurfaceAreaOperations, TraditionalSegmentationOperations):
     """
     四宫格 CT 浏览器：
     - 左上：Axial（横断面）切片 + 滑动条
