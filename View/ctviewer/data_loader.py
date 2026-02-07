@@ -27,36 +27,66 @@ class DataLoader:
         if filename:
             # 如果选择了.raw文件，则需要询问维度
             if filename.endswith('.raw'):
+                # 增强对话框：同时输入 raw 的维度 (Z,Y,X) 和体素大小 (spacing)
                 dialog = QtWidgets.QDialog(self)
-                dialog.setWindowTitle("输入RAW文件维度")
-                
+                dialog.setWindowTitle("输入RAW文件维度和体素大小")
+
                 form_layout = QtWidgets.QFormLayout(dialog)
-                
+
+                # 体素维度输入
                 z_input = QtWidgets.QSpinBox()
                 z_input.setRange(1, 2000)
                 z_input.setValue(512)
                 form_layout.addRow("Z 维度:", z_input)
-                
+
                 y_input = QtWidgets.QSpinBox()
                 y_input.setRange(1, 2000)
                 y_input.setValue(512)
                 form_layout.addRow("Y 维度:", y_input)
-                
+
                 x_input = QtWidgets.QSpinBox()
                 x_input.setRange(1, 2000)
                 x_input.setValue(512)
                 form_layout.addRow("X 维度:", x_input)
-                
+
+                # 体素大小输入（单位示例：mm）
+                sx_input = QtWidgets.QDoubleSpinBox()
+                sx_input.setRange(0.000001, 1000.0)
+                sx_input.setDecimals(6)
+                sx_input.setValue(1.0)
+                sx_input.setSingleStep(0.001)
+                sx_input.setToolTip("X方向体素大小（例如 mm）")
+                form_layout.addRow("Spacing X (mm):", sx_input)
+
+                sy_input = QtWidgets.QDoubleSpinBox()
+                sy_input.setRange(0.000001, 1000.0)
+                sy_input.setDecimals(6)
+                sy_input.setValue(1.0)
+                sy_input.setSingleStep(0.001)
+                sy_input.setToolTip("Y方向体素大小（例如 mm）")
+                form_layout.addRow("Spacing Y (mm):", sy_input)
+
+                sz_input = QtWidgets.QDoubleSpinBox()
+                sz_input.setRange(0.000001, 1000.0)
+                sz_input.setDecimals(6)
+                sz_input.setValue(1.0)
+                sz_input.setSingleStep(0.001)
+                sz_input.setToolTip("Z方向体素大小（例如 mm）")
+                form_layout.addRow("Spacing Z (mm):", sz_input)
+
+                # 确认按钮
                 button_box = QtWidgets.QDialogButtonBox(
                     QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
                 )
                 button_box.accepted.connect(dialog.accept)
                 button_box.rejected.connect(dialog.reject)
                 form_layout.addRow(button_box)
-                
+
                 if dialog.exec_() == QtWidgets.QDialog.Accepted:
                     shape = (z_input.value(), y_input.value(), x_input.value())
-                    self.load_data(filename, shape)
+                    spacing = (float(sx_input.value()), float(sy_input.value()), float(sz_input.value()))
+                    # 将 spacing 传递给 load_data，保证后续 3D 显示使用正确的体素比例
+                    self.load_data(filename, shape, spacing)
             else:
                 # 对于其他格式，直接加载
                 self.load_data(filename)

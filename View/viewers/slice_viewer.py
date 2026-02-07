@@ -942,8 +942,9 @@ class SliceViewer(QtWidgets.QWidget):
             
             # 更新状态栏显示当前距离
             if hasattr(self, 'parent_controller') and self.parent_controller and hasattr(self.parent_controller, 'statusBar'):
-                distance = self.calculate_distance(self.start_point, self.end_point)
-                self.parent_controller.statusBar().showMessage(f"测量距离: {int(distance)} 像素")
+                distance_px = self.calculate_distance(self.start_point, self.end_point)
+                distance_mm = self.pixels_to_mm(self.start_point, self.end_point)
+                self.parent_controller.statusBar().showMessage(f"测量距离: {distance_mm:.2f} mm")
                 
             # 实时更新其他视图中的临时线段
             if hasattr(self, 'parent_controller') and self.parent_controller:
@@ -970,7 +971,8 @@ class SliceViewer(QtWidgets.QWidget):
             
             # 更新状态栏显示当前距离
             if hasattr(self, 'parent_controller') and self.parent_controller and hasattr(self.parent_controller, 'statusBar'):
-                self.parent_controller.statusBar().showMessage(f"测量距离: {int(distance)} 像素")
+                distance_mm = self.pixels_to_mm(start, end)
+                self.parent_controller.statusBar().showMessage(f"测量距离: {distance_mm:.2f} mm")
             
             # 实时更新其他视图中的对应线段
             if hasattr(self, 'parent_controller') and self.parent_controller:
@@ -1131,7 +1133,8 @@ class SliceViewer(QtWidgets.QWidget):
                 
                 # 更新状态栏显示测量完成
                 if hasattr(self.parent_controller, 'statusBar'):
-                    self.parent_controller.statusBar().showMessage(f"测量完成: {int(distance)} 像素", 3000)
+                    distance_mm = self.pixels_to_mm(self.start_point, self.end_point)
+                    self.parent_controller.statusBar().showMessage(f"测量完成: {distance_mm:.2f} mm", 3000)
             
             # 重置测量状态
             self.is_measuring = False
@@ -1158,7 +1161,8 @@ class SliceViewer(QtWidgets.QWidget):
                 
                 # 更新状态栏显示测量更新
                 if hasattr(self.parent_controller, 'statusBar'):
-                    self.parent_controller.statusBar().showMessage(f"测量更新: {int(distance)} 像素", 3000)
+                    distance_mm = self.pixels_to_mm(start, end)
+                    self.parent_controller.statusBar().showMessage(f"测量更新: {distance_mm:.2f} mm", 3000)
             
             # 重置拖动状态
             self.active_line_index = -1
@@ -1267,6 +1271,53 @@ class SliceViewer(QtWidgets.QWidget):
     def calculate_distance(self, p1, p2):
         """计算两点之间的欧几里得距离"""
         return math.sqrt((p2.x() - p1.x())**2 + (p2.y() - p1.y())**2)
+    
+    def pixels_to_mm(self, p1, p2):
+        """
+        将两点之间的像素距离转换为毫米（物理距离），根据当前视图的像素间距(spacing)进行映射。
+
+        视图平面映射规则（与 DataLoader/CTImageData 保持一致）：
+        - Axial: pixmap (Y, X) -> scene.x = X (spacing_x), scene.y = Y (spacing_y)
+        - Sagittal: pixmap (Z, Y) -> scene.x = Y (spacing_y), scene.y = Z (spacing_z)
+        - Coronal: pixmap (Z, X) -> scene.x = X (spacing_x), scene.y = Z (spacing_z)
+
+        参数
+        ----
+        p1, p2 : QPointF
+            场景坐标点
+
+        返回
+        ----
+        mm_distance : float
+            两点之间的物理距离，单位 mm
+        """
+        dx = p2.x() - p1.x()
+        dy = p2.y() - p1.y()
+
+        # 默认 spacing
+        sx = sy = sz = 1.0
+        if hasattr(self, 'parent_viewer') and self.parent_viewer and hasattr(self.parent_viewer, 'spacing'):
+            try:
+                sx, sy, sz = self.parent_viewer.spacing
+            except Exception:
+                # 如果 spacing 长度或顺序异常，仍使用默认 1.0
+                sx, sy, sz = 1.0, 1.0, 1.0
+
+        # 根据视图类型选择合适的像素间距映射
+        if self.view_type == 'axial':
+            # scene.x -> X (sx), scene.y -> Y (sy)
+            mm = math.sqrt((dx * sx) ** 2 + (dy * sy) ** 2)
+        elif self.view_type == 'sagittal':
+            # scene.x -> Y (sy), scene.y -> Z (sz)
+            mm = math.sqrt((dx * sy) ** 2 + (dy * sz) ** 2)
+        elif self.view_type == 'coronal':
+            # scene.x -> X (sx), scene.y -> Z (sz)
+            mm = math.sqrt((dx * sx) ** 2 + (dy * sz) ** 2)
+        else:
+            # 未知视图，退回为像素距离
+            mm = math.sqrt(dx * dx + dy * dy)
+
+        return mm
         
     def calculate_angle(self, p1, p2, p3):
         """
@@ -1465,8 +1516,9 @@ class SliceViewer(QtWidgets.QWidget):
                 text_x = mid_x + 10
                 text_y = mid_y - 20
                 
-            # 创建文本项 - 只显示整数值
-            text = QtWidgets.QGraphicsTextItem(f"{int(line['distance'])}")
+            # 创建文本项 - 显示毫米值
+            distance_mm = self.pixels_to_mm(constrained_start, constrained_end)
+            text = QtWidgets.QGraphicsTextItem(f"{distance_mm:.2f} mm")
             text.setPos(text_x, text_y)
             text.setDefaultTextColor(QtGui.QColor(255, 0, 0))
             
@@ -1518,7 +1570,7 @@ class SliceViewer(QtWidgets.QWidget):
             self.scene.addItem(end_rect)
             
             # 计算并显示当前距离
-            distance = self.calculate_distance(constrained_start, constrained_end)
+            distance_mm = self.pixels_to_mm(constrained_start, constrained_end)
             
             # 计算线段中点
             mid_x = (constrained_start.x() + constrained_end.x()) / 2
@@ -1545,8 +1597,8 @@ class SliceViewer(QtWidgets.QWidget):
                 text_x = mid_x + 10
                 text_y = mid_y - 20
             
-            # 创建文本项 - 只显示整数值
-            text = QtWidgets.QGraphicsTextItem(f"{int(distance)}")
+            # 创建文本项 - 显示毫米值
+            text = QtWidgets.QGraphicsTextItem(f"{distance_mm:.2f} mm")
             text.setPos(text_x, text_y)
             text.setDefaultTextColor(QtGui.QColor(255, 0, 0))
             
@@ -2007,8 +2059,9 @@ class SliceViewer(QtWidgets.QWidget):
                     text_x = mid_x + 10
                     text_y = mid_y - 20
                 
-                # 创建文本项 - 只显示整数值
-                text = QtWidgets.QGraphicsTextItem(f"{int(line['distance'])}")
+                # 创建文本项 - 显示毫米值
+                distance_mm = self.pixels_to_mm(line['start'], line['end'])
+                text = QtWidgets.QGraphicsTextItem(f"{distance_mm:.2f} mm")
                 text.setPos(text_x, text_y)
                 text.setDefaultTextColor(QtGui.QColor(0, 0, 255))  # 蓝色
                 

@@ -33,12 +33,58 @@ class CTImageData:
     def load_image(self):
         """根据文件类型读取 CT 数据"""
         if self.filename.endswith(".raw"):
+            # RAW 文件没有元信息，需要用户提供 shape, 可选提供 spacing 和 dtype
             if self.shape is None:
                 raise ValueError("读取 .raw 必须提供 shape=(z,y,x)")
-            data = np.fromfile(self.filename, dtype=self.dtype).reshape(self.shape)
+
+            # 先尝试用提供的 dtype 读取，并对文件大小/shape 做校验和容错处理
+            import os
+            file_size = os.path.getsize(self.filename)
+            expected_voxels = int(np.prod(self.shape))
+            provided_dtype = np.dtype(self.dtype)
+            expected_bytes = expected_voxels * provided_dtype.itemsize
+
+            # 如果文件大小与期望不匹配，尝试常见 dtype 自动匹配
+            dtype_to_use = provided_dtype
+            if file_size != expected_bytes:
+                common = [np.uint16, np.uint8, np.float32]
+                for dt in common:
+                    if file_size == expected_voxels * np.dtype(dt).itemsize:
+                        dtype_to_use = np.dtype(dt)
+                        break
+
+            # 读取原始数据
+            raw = np.fromfile(self.filename, dtype=dtype_to_use)
+
+            # 尝试按 C-order 重塑为 (z,y,x)，若失败则尝试 Fortran-order（很多 raw 以 X 快速变化）
+            try:
+                data = raw.reshape(self.shape)
+            except Exception:
+                try:
+                    data = raw.reshape(self.shape, order='F')
+                except Exception as e:
+                    raise ValueError(
+                        f"无法将 RAW 文件重塑为给定 shape={self.shape} (dtype={dtype_to_use}). "
+                        f"文件大小={file_size} 字节, 期望 {expected_voxels} voxels * {dtype_to_use.itemsize} bytes"
+                    ) from e
+
+            # 将 NumPy 数组转换为 SimpleITK Image
             self.image = sitk.GetImageFromArray(data)
+
+            # 如果用户提供了 spacing，就设置；否则设为默认 (1.0,1.0,1.0)
             if self.spacing:
                 self.image.SetSpacing(self.spacing)
+            else:
+                self.image.SetSpacing((1.0, 1.0, 1.0))
+
+            # RAW 没有方向信息，显式设置为单位方向矩阵，避免与 NIfTI 行为差异
+            try:
+                self.image.SetDirection((1.0, 0.0, 0.0,
+                                         0.0, 1.0, 0.0,
+                                         0.0, 0.0, 1.0))
+            except Exception:
+                # 如果 SimpleITK 版本/平台不支持设置方向则忽略
+                pass
         else:
             self.image = sitk.ReadImage(self.filename)
 
