@@ -190,7 +190,17 @@ class UIComponents:
         import_action = QtWidgets.QAction("导入文件", self)
         import_action.triggered.connect(self.import_file)
         file_menu.addAction(import_action)
-          
+
+        # 新增：导出切片为 TIFF（无符号16位）
+        export_slices_action = QtWidgets.QAction("导出切片为TIFF...", self)
+        export_slices_action.triggered.connect(lambda: getattr(self, 'export_slices_dialog', lambda: None)())
+        file_menu.addAction(export_slices_action)
+
+        # 新增：从切片重建体数据
+        import_slices_action = QtWidgets.QAction("从切片重建...", self)
+        import_slices_action.triggered.connect(lambda: getattr(self, 'import_slices_dialog', lambda: None)())
+        file_menu.addAction(import_slices_action)
+        
         # 滤波菜单
         filter_menu = self.menu_bar.addMenu("滤波")
         

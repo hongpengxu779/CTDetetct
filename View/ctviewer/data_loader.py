@@ -7,6 +7,9 @@ import os
 import numpy as np
 import SimpleITK as sitk
 from PyQt5 import QtWidgets, QtCore
+import json
+import imageio
+import re
 
 from File.readData import CTImageData
 from ..viewers import SliceViewer, VolumeViewer
@@ -707,4 +710,196 @@ class DataLoader:
             if 'progress' in locals():
                 progress.close()
             QtWidgets.QMessageBox.critical(self, "错误", f"加载重建数据时出错：{str(e)}")
+
+    def export_slices_dialog(self):
+        """通过对话框导出当前数据为按轴切片的uint16 TIFF序列并保存元数据（可逆）。"""
+        if not hasattr(self, 'raw_array') or self.raw_array is None:
+            QtWidgets.QMessageBox.warning(self, "导出失败", "没有可用的影像数据来导出。")
+            return
+
+        # 选择方向
+        axes = {"Z (Axial)": 0, "Y (Coronal)": 1, "X (Sagittal)": 2}
+        items = list(axes.keys())
+        item, ok = QtWidgets.QInputDialog.getItem(self, "选择导出方向", "沿哪个方向导出切片：", items, 0, False)
+        if not ok:
+            return
+        axis = axes[item]
+
+        # 选择输出目录
+        out_dir = QtWidgets.QFileDialog.getExistingDirectory(self, "选择保存切片的文件夹")
+        if not out_dir:
+            return
+
+        # 文件名前缀
+        prefix, ok = QtWidgets.QInputDialog.getText(self, "输入文件前缀", "每张切片的文件名前缀（例如 slice）：", text="slice")
+        if not ok:
+            return
+
+        try:
+            self.export_slices(axis=axis, out_dir=out_dir, prefix=prefix)
+            QtWidgets.QMessageBox.information(self, "导出完成", f"已导出切片到：\n{out_dir}")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(self, "导出失败", str(e))
+
+    def export_slices(self, axis, out_dir, prefix='slice'):
+        """将当前原始数组沿指定轴导出为uint16 TIFF序列，并写出元数据用于可逆重建。
+
+        参数
+        ----
+        axis: int
+            导出轴 (0=Z,1=Y,2=X)
+        out_dir: str
+            输出文件夹
+        prefix: str
+            每个切片文件的前缀
+        """
+        arr = self.raw_array
+        if arr is None:
+            raise RuntimeError('没有原始数组可导出')
+
+        # 确保为 uint16
+        arr_uint16 = arr.astype(np.uint16)
+
+        num_slices = arr_uint16.shape[axis]
+
+        # 创建元数据
+        metadata = {
+            'axis': int(axis),
+            'shape': tuple(int(x) for x in arr_uint16.shape),
+            'spacing': tuple(float(x) for x in (self.spacing if self.spacing is not None else (1.0, 1.0, 1.0))),
+            'dtype': 'uint16',
+            'prefix': prefix,
+            'file_pattern': f"{prefix}_%0{max(4, len(str(num_slices)))}d.tiff",
+            'count': int(num_slices)
+        }
+
+        # 保存元数据
+        meta_path = os.path.join(out_dir, 'export_metadata.json')
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, ensure_ascii=False, indent=2)
+
+        # 进度对话框
+        progress = QtWidgets.QProgressDialog("正在导出切片...", "取消", 0, num_slices, self)
+        progress.setWindowModality(QtCore.Qt.WindowModal)
+        progress.show()
+        QtWidgets.QApplication.processEvents()
+
+        for i in range(num_slices):
+            if progress.wasCanceled():
+                break
+
+            # 取出指定轴的切片
+            if axis == 0:
+                slice2d = arr_uint16[i, :, :]
+            elif axis == 1:
+                slice2d = arr_uint16[:, i, :]
+            else:
+                slice2d = arr_uint16[:, :, i]
+
+            filename = os.path.join(out_dir, f"{prefix}_{i:0{max(4, len(str(num_slices))) }d}.tiff")
+
+            # 使用 imageio 保存 uint16 TIFF
+            imageio.imwrite(filename, slice2d.astype(np.uint16))
+
+            progress.setValue(i + 1)
+            QtWidgets.QApplication.processEvents()
+
+        progress.close()
+
+    def import_slices_dialog(self):
+        """通过对话框从保存的切片文件夹或metadata.json重建体数据并加载到应用中。"""
+        # 选择包含切片的目录
+        in_dir = QtWidgets.QFileDialog.getExistingDirectory(self, "选择包含切片的文件夹")
+        if not in_dir:
+            return
+
+        try:
+            volume_image, volume_array, metadata = self.import_slices(in_dir)
+            # 使用已有的加载函数将重建数据加载入视图
+            self.load_reconstructed_data(volume_image, volume_array, title=os.path.basename(in_dir))
+            QtWidgets.QMessageBox.information(self, "导入完成", f"已从切片重建并加载：\n{in_dir}")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(self, "导入失败", str(e))
+
+    def import_slices(self, in_dir):
+        """从某个目录读取uint16 TIFF序列（优先使用export_metadata.json），并重建3D numpy数组和SimpleITK图像。
+
+        返回 (sitk.Image, np.ndarray, metadata)
+        """
+        meta_path = os.path.join(in_dir, 'export_metadata.json')
+        metadata = None
+        if os.path.exists(meta_path):
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                metadata = json.load(f)
+
+        # 列出所有 tiff/tif 文件
+        files = [f for f in os.listdir(in_dir) if f.lower().endswith(('.tif', '.tiff'))]
+        if not files:
+            raise RuntimeError('未在目录中找到 TIFF 文件')
+
+        # 自然数值排序函数
+        def natural_key(s):
+            nums = re.findall(r"\d+", s)
+            if nums:
+                return int(nums[-1])
+            return s
+
+        files = sorted(files, key=natural_key)
+
+        # 读取所有切片为 uint16
+        slices = []
+        progress = QtWidgets.QProgressDialog("正在读取切片...", "取消", 0, len(files), self)
+        progress.setWindowModality(QtCore.Qt.WindowModal)
+        progress.show()
+        for i, fname in enumerate(files):
+            if progress.wasCanceled():
+                break
+            path = os.path.join(in_dir, fname)
+            img = imageio.imread(path)
+            # 强制为 uint16
+            img = np.asarray(img).astype(np.uint16)
+            slices.append(img)
+            progress.setValue(i + 1)
+            QtWidgets.QApplication.processEvents()
+        progress.close()
+
+        # 堆叠为 (N, H, W)
+        stack = np.stack(slices, axis=0)
+
+        if metadata is not None:
+            axis = int(metadata.get('axis', 0))
+            shape = tuple(metadata.get('shape', stack.shape))
+            spacing = tuple(metadata.get('spacing', (1.0, 1.0, 1.0)))
+
+            # 根据导出轴将 stack 放回原始形状
+            if axis == 0:
+                vol = stack
+            elif axis == 1:
+                # stack currently (N, H, W) where N was Y slices -> need (Z,Y,X)
+                # original shape = (Z,Y,X)
+                # We received slices along Y: each slice has shape (Z,X) if exported along Y. But our export always saved 2D arrays with consistent orientation.
+                vol = np.transpose(stack, (1, 0, 2))
+            else:
+                vol = np.transpose(stack, (1, 2, 0))
+
+            # Ensure final shape matches metadata
+            if vol.shape != shape:
+                try:
+                    vol = vol.reshape(shape)
+                except Exception:
+                    # 如果形状不匹配，尽量调整
+                    pass
+
+            sitk_image = sitk.GetImageFromArray(vol)
+            sitk_image.SetSpacing(spacing)
+            return sitk_image, vol.astype(np.uint16), metadata
+        else:
+            # 未找到 metadata，默认认为沿 Z 堆叠
+            sitk_image = sitk.GetImageFromArray(stack)
+            sitk_image.SetSpacing((1.0, 1.0, 1.0))
+            return sitk_image, stack.astype(np.uint16), {'axis': 0, 'shape': stack.shape, 'spacing': (1.0,1.0,1.0)}
 
