@@ -220,6 +220,25 @@ class UIComponents:
         bilateral_action.triggered.connect(self.apply_bilateral_filter)
         filter_menu.addAction(bilateral_action)
         
+        # 图像增强菜单
+        enhance_menu = self.menu_bar.addMenu("图像增强")
+        
+        hist_eq_action = QtWidgets.QAction("直方图均衡化", self)
+        hist_eq_action.triggered.connect(self.apply_histogram_equalization)
+        enhance_menu.addAction(hist_eq_action)
+        
+        clahe_action = QtWidgets.QAction("限制对比度直方图均衡化 (CLAHE)", self)
+        clahe_action.triggered.connect(self.apply_clahe)
+        enhance_menu.addAction(clahe_action)
+        
+        retinex_action = QtWidgets.QAction("Retinex SSR", self)
+        retinex_action.triggered.connect(self.apply_retinex_ssr)
+        enhance_menu.addAction(retinex_action)
+        
+        dehaze_action = QtWidgets.QAction("去雾", self)
+        dehaze_action.triggered.connect(self.apply_dehaze)
+        enhance_menu.addAction(dehaze_action)
+        
         # CT重建菜单
         ct_menu = self.menu_bar.addMenu("CT重建")
         
