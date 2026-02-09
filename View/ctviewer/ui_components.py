@@ -239,6 +239,10 @@ class UIComponents:
         dehaze_action.triggered.connect(self.apply_dehaze)
         enhance_menu.addAction(dehaze_action)
         
+        fuzzy_enhance_action = QtWidgets.QAction("补偿模糊增强", self)
+        fuzzy_enhance_action.triggered.connect(self.apply_fuzzy_enhancement)
+        enhance_menu.addAction(fuzzy_enhance_action)
+        
         # CT重建菜单
         ct_menu = self.menu_bar.addMenu("CT重建")
         

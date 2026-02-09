@@ -1,6 +1,6 @@
 """
 图像增强操作功能
-负责直方图均衡化、CLAHE、Retinex SSR、去雾等3D图像增强处理
+负责直方图均衡化、CLAHE、Retinex SSR、去雾、光照补偿模糊增强等3D图像增强处理
 """
 
 from PyQt5 import QtWidgets
@@ -10,6 +10,7 @@ from Traditional.Enhancement.enhancement_dialogs import (
     RetinexSSRDialog,
     DehazeDialog,
 )
+from Traditional.Enhancement.fuzzy_enhancement_dialog import FuzzyEnhancementDialog
 
 
 class EnhancementOperations:
@@ -56,3 +57,7 @@ class EnhancementOperations:
     def apply_dehaze(self):
         """应用暗通道先验去雾"""
         self._run_enhancement_dialog(DehazeDialog, "去雾")
+
+    def apply_fuzzy_enhancement(self):
+        """应用基于光照补偿的模糊增强"""
+        self._run_enhancement_dialog(FuzzyEnhancementDialog, "补偿模糊增强")
