@@ -19,6 +19,9 @@ class WindowLevelControl:
         self.window_level = self.wl_slider.value()
         self.ww_value.setText(str(int(self.window_width)))
         self.wl_value.setText(str(int(self.window_level)))
+
+        if hasattr(self, 'prop_window_label'):
+            self.prop_window_label.setText(f"W: {int(self.window_width)}, L: {int(self.window_level)}")
         
         # 更新所有视图
         self.update_all_views()
@@ -35,6 +38,9 @@ class WindowLevelControl:
         # 重置为全范围
         self.window_width = int(data_max - data_min)
         self.window_level = int((data_max + data_min) / 2)
+
+        if hasattr(self, 'prop_window_label'):
+            self.prop_window_label.setText(f"W: {int(self.window_width)}, L: {int(self.window_level)}")
         
         self.ww_slider.setValue(self.window_width)
         self.wl_slider.setValue(self.window_level)

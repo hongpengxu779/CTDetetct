@@ -247,6 +247,24 @@ class DataLoader:
             self.raw_array = temp_array
             self.is_segmentation = is_segmentation  # 保存分割结果标志
             print(f"raw_array已设置，形状: {self.raw_array.shape}")
+
+            if hasattr(self, 'prop_size_label'):
+                self.prop_size_label.setText(f"{self.depth_x} x {self.depth_y} x {self.depth_z}")
+            if hasattr(self, 'prop_spacing_label'):
+                sx, sy, sz = self.spacing if self.spacing is not None else (1.0, 1.0, 1.0)
+                self.prop_spacing_label.setText(f"{sx:.4f} x {sy:.4f} x {sz:.4f}")
+                if hasattr(self, 'prop_spacing_xyz_label'):
+                    self.prop_spacing_xyz_label.setText(f"{sx:.4f} x {sy:.4f} x {sz:.4f}")
+            if hasattr(self, 'prop_type_label'):
+                self.prop_type_label.setText(str(self.array.dtype))
+            if hasattr(self, 'prop_width_label'):
+                self.prop_width_label.setText(str(self.depth_x))
+            if hasattr(self, 'prop_height_label'):
+                self.prop_height_label.setText(str(self.depth_y))
+            if hasattr(self, 'prop_slice_count_label'):
+                self.prop_slice_count_label.setText(str(self.depth_z))
+            if hasattr(self, 'prop_format_label'):
+                self.prop_format_label.setText(os.path.splitext(filename)[1].lower().replace('.', '') or "volume")
             if is_segmentation:
                 print("✓ 检测到分割结果，将不应用窗宽窗位")
             
@@ -324,24 +342,26 @@ class DataLoader:
             if data_max > 0:
                 # 创建三维体渲染视图（禁用降采样）
                 self.volume_viewer = VolumeViewer(self.array, self.spacing, simplified=True, downsample_factor=1)
+                if hasattr(self.volume_viewer, 'set_background_color'):
+                    self.volume_viewer.set_background_color((0.45, 0.08, 0.08))
                 
                 # 四宫格布局
-                self.grid_layout.addWidget(self.axial_viewer, 0, 0)
-                self.grid_layout.addWidget(self.sag_viewer, 0, 1)
-                self.grid_layout.addWidget(self.cor_viewer, 1, 0)
-                self.grid_layout.addWidget(self.volume_viewer, 1, 1)
+                self.grid_layout.addWidget(self.volume_viewer, 0, 0)
+                self.grid_layout.addWidget(self.cor_viewer, 0, 1)
+                self.grid_layout.addWidget(self.axial_viewer, 1, 0)
+                self.grid_layout.addWidget(self.sag_viewer, 1, 1)
             else:
                 # 数据全为0，只显示2D视图
                 print("数据全为0，跳过3D视图创建")
-                self.grid_layout.addWidget(self.axial_viewer, 0, 0)
-                self.grid_layout.addWidget(self.sag_viewer, 0, 1)
-                self.grid_layout.addWidget(self.cor_viewer, 1, 0)
+                self.grid_layout.addWidget(self.cor_viewer, 0, 1)
+                self.grid_layout.addWidget(self.axial_viewer, 1, 0)
+                self.grid_layout.addWidget(self.sag_viewer, 1, 1)
                 
-                # 在右下角显示提示信息
+                # 在左上角显示提示信息
                 info_label = QtWidgets.QLabel("3D视图不可用\n(数据全为0)")
                 info_label.setAlignment(QtCore.Qt.AlignCenter)
-                info_label.setStyleSheet("QLabel { background-color: #f0f0f0; color: #666; font-size: 14pt; }")
-                self.grid_layout.addWidget(info_label, 1, 1)
+                info_label.setStyleSheet("QLabel { background-color: #4a0000; color: #d0d0d0; font-size: 14pt; }")
+                self.grid_layout.addWidget(info_label, 0, 0)
             
             # 更新显示
             self.setWindowTitle(f"CT Viewer - {os.path.basename(filename)}")
@@ -362,6 +382,9 @@ class DataLoader:
             # 更新灰度直方图
             if hasattr(self, 'update_histogram'):
                 self.update_histogram(self.array)
+
+            if hasattr(self, '_refresh_preview_thumbnail'):
+                self._refresh_preview_thumbnail()
             
         except Exception as e:
             import traceback
@@ -403,19 +426,24 @@ class DataLoader:
         
         # 创建简化版3D体渲染视图（禁用降采样）
         self.volume_viewer = VolumeViewer(self.array, self.spacing, simplified=True, downsample_factor=1)
+        if hasattr(self.volume_viewer, 'set_background_color'):
+            self.volume_viewer.set_background_color((0.45, 0.08, 0.08))
         
         # 应用与load_reconstructed_data相同的3D视图参数调整
         self.volume_viewer.adjust_contrast(opacity_scale=1.5)
         
         # 四视图布局
-        self.grid_layout.addWidget(self.axial_viewer, 0, 0)
-        self.grid_layout.addWidget(self.sag_viewer, 0, 1)
-        self.grid_layout.addWidget(self.cor_viewer, 1, 0)
-        self.grid_layout.addWidget(self.volume_viewer, 1, 1)
+        self.grid_layout.addWidget(self.volume_viewer, 0, 0)
+        self.grid_layout.addWidget(self.cor_viewer, 0, 1)
+        self.grid_layout.addWidget(self.axial_viewer, 1, 0)
+        self.grid_layout.addWidget(self.sag_viewer, 1, 1)
         
         # 更新灰度直方图
         if hasattr(self, 'update_histogram'):
             self.update_histogram(self.array)
+
+        if hasattr(self, '_refresh_preview_thumbnail'):
+            self._refresh_preview_thumbnail()
     
     def load_reconstructed_data(self, image, array, title="重建数据"):
         """

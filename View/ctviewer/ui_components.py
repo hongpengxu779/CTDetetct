@@ -3,7 +3,7 @@ CT查看器UI组件
 包含样式表、菜单、工具栏等UI相关功能
 """
 
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets, QtCore, QtGui
 import numpy as np
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -28,19 +28,21 @@ class UIComponents:
         """应用样式表以美化界面"""
         stylesheet = """
         QMainWindow {
-            background-color: #f5f5f5;
+            background-color: #2a2a2a;
         }
         
         QWidget {
-            background-color: #f5f5f5;
+            background-color: #2a2a2a;
+            color: #d8d8d8;
         }
         
         QMenuBar {
-            background-color: #ffffff;
-            border-bottom: 1px solid #d0d0d0;
+            background-color: #383838;
+            border-bottom: 1px solid #1e1e1e;
             padding: 2px 4px;
             min-height: 28px;
             spacing: 3px;
+            color: #e6e6e6;
         }
         
         QMenuBar::item {
@@ -51,17 +53,18 @@ class UIComponents:
         }
         
         QMenuBar::item:selected {
-            background-color: #e3f2fd;
+            background-color: #505050;
         }
         
         QMenuBar::item:pressed {
-            background-color: #bbdefb;
+            background-color: #5d5d5d;
         }
         
         QMenu {
-            background-color: #ffffff;
-            border: 1px solid #d0d0d0;
+            background-color: #3a3a3a;
+            border: 1px solid #4a4a4a;
             border-radius: 4px;
+            color: #f0f0f0;
         }
         
         QMenu::item {
@@ -69,60 +72,120 @@ class UIComponents:
         }
         
         QMenu::item:selected {
-            background-color: #e3f2fd;
+            background-color: #5d5d5d;
+        }
+
+        QToolBar {
+            background-color: #343434;
+            border-bottom: 1px solid #222;
+            spacing: 2px;
+            padding: 2px;
+        }
+
+        QToolButton {
+            background-color: #474747;
+            color: #f2f2f2;
+            border: 1px solid #5d5d5d;
+            border-radius: 3px;
+            padding: 2px 5px;
+            min-height: 20px;
+        }
+
+        QToolButton:hover {
+            background-color: #5a5a5a;
+        }
+
+        QToolButton:pressed {
+            background-color: #676767;
+        }
+
+        QTabWidget::pane {
+            border: 1px solid #444;
+            background: #2d2d2d;
+        }
+
+        QTabBar::tab {
+            background: #3a3a3a;
+            border: 1px solid #505050;
+            padding: 4px 8px;
+            margin-right: 1px;
+            color: #d8d8d8;
+        }
+
+        QTabBar::tab:selected {
+            background: #505050;
+            color: #f3f3f3;
+        }
+
+        QToolBox::tab {
+            background: #3b3b3b;
+            border: 1px solid #4f4f4f;
+            padding: 4px 6px;
+            color: #e2e2e2;
+            font-weight: bold;
+        }
+
+        QToolBox::tab:selected {
+            background: #505050;
+        }
+
+        QScrollArea {
+            border: none;
+            background: #2f2f2f;
         }
         
         QGroupBox {
-            background-color: #ffffff;
-            border: 1px solid #d0d0d0;
+            background-color: #323232;
+            border: 1px solid #4d4d4d;
             border-radius: 6px;
             margin-top: 10px;
             padding-top: 10px;
             font-weight: bold;
+            color: #e8e8e8;
         }
         
         QGroupBox::title {
             subcontrol-origin: margin;
             subcontrol-position: top left;
             padding: 4px 8px;
-            background-color: #ffffff;
+            background-color: #323232;
             border-radius: 3px;
         }
         
         QPushButton {
-            background-color: #E3F2FD;
-            color: #212121;
-            border: 1px solid #BBDEFB;
+            background-color: #4b4b4b;
+            color: #f1f1f1;
+            border: 1px solid #666;
             border-radius: 4px;
             padding: 6px 16px;
             font-weight: 500;
         }
         
         QPushButton:hover {
-            background-color: #BBDEFB;
-            color: #000000;
+            background-color: #5b5b5b;
+            color: #ffffff;
         }
         
         QPushButton:pressed {
-            background-color: #90CAF9;
-            color: #000000;
+            background-color: #676767;
+            color: #ffffff;
         }
         
         QPushButton:disabled {
-            background-color: #F5F5F5;
-            color: #9E9E9E;
+            background-color: #3a3a3a;
+            color: #8e8e8e;
         }
         
         QSlider::groove:horizontal {
-            border: 1px solid #BDBDBD;
+            border: 1px solid #555;
             height: 6px;
-            background: #E0E0E0;
+            background: #2d2d2d;
             border-radius: 3px;
         }
         
         QSlider::handle:horizontal {
-            background: #2196F3;
-            border: 1px solid #1976D2;
+            background: #909090;
+            border: 1px solid #b0b0b0;
             width: 16px;
             height: 16px;
             margin: -6px 0;
@@ -130,33 +193,50 @@ class UIComponents:
         }
         
         QSlider::handle:horizontal:hover {
-            background: #1976D2;
+            background: #b0b0b0;
         }
         
         QLabel {
-            color: #424242;
+            color: #d8d8d8;
         }
         
         QLineEdit {
-            background-color: #ffffff;
-            border: 1px solid #BDBDBD;
+            background-color: #2c2c2c;
+            border: 1px solid #666;
             border-radius: 4px;
             padding: 6px;
+            color: #e8e8e8;
         }
         
         QLineEdit:focus {
-            border: 2px solid #2196F3;
+            border: 2px solid #9a9a9a;
         }
         
         QSpinBox, QDoubleSpinBox {
-            background-color: #ffffff;
-            border: 1px solid #BDBDBD;
+            background-color: #2c2c2c;
+            border: 1px solid #666;
             border-radius: 4px;
             padding: 4px;
+            color: #f0f0f0;
         }
         
         QSpinBox:focus, QDoubleSpinBox:focus {
-            border: 2px solid #2196F3;
+            border: 2px solid #9a9a9a;
+        }
+
+        QListWidget {
+            background-color: #2a2a2a;
+            border: 1px solid #4c4c4c;
+        }
+
+        QListWidget::item:selected {
+            background-color: #5d5d5d;
+        }
+
+        QStatusBar {
+            background-color: #333;
+            color: #d6d6d6;
+            border-top: 1px solid #1d1d1d;
         }
         
         QRadioButton {
@@ -178,6 +258,117 @@ class UIComponents:
         }
         """
         self.setStyleSheet(stylesheet)
+
+    def create_top_toolbars(self):
+        """创建顶部双排工具条（仿工业影像软件布局）"""
+        style = self.style()
+
+        # 第一排：基础文件操作
+        primary_toolbar = QtWidgets.QToolBar("主工具栏", self)
+        primary_toolbar.setMovable(False)
+        primary_toolbar.setIconSize(QtCore.QSize(14, 14))
+        self.addToolBar(QtCore.Qt.TopToolBarArea, primary_toolbar)
+
+        open_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DialogOpenButton), "打开", self)
+        open_action.triggered.connect(self.import_file)
+        primary_toolbar.addAction(open_action)
+
+        save_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DialogSaveButton), "保存", self)
+        save_action.triggered.connect(self.save_current_session)
+        primary_toolbar.addAction(save_action)
+
+        import_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DirOpenIcon), "导入", self)
+        import_action.triggered.connect(self.import_file)
+        primary_toolbar.addAction(import_action)
+
+        export_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DialogSaveButton), "导出", self)
+        export_action.triggered.connect(self.export_current_layer)
+        primary_toolbar.addAction(export_action)
+
+        reset_view_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_BrowserReload), "重置窗宽窗位", self)
+        reset_view_action.triggered.connect(self.reset_window_level)
+        primary_toolbar.addAction(reset_view_action)
+
+        primary_toolbar.addSeparator()
+
+        roi_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DirIcon), "ROI", self)
+        roi_action.triggered.connect(self.roi_selection_start)
+        primary_toolbar.addAction(roi_action)
+
+        roi_clear_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_TrashIcon), "清除ROI", self)
+        roi_clear_action.triggered.connect(self.roi_selection_clear)
+        primary_toolbar.addAction(roi_clear_action)
+
+        primary_toolbar.addSeparator()
+
+        segment_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowForward), "U-Net分割", self)
+        segment_action.triggered.connect(self.run_unet_segmentation)
+        primary_toolbar.addAction(segment_action)
+
+        # 第二排：视图/测量快捷
+        secondary_toolbar = QtWidgets.QToolBar("显示工具栏", self)
+        secondary_toolbar.setMovable(False)
+        secondary_toolbar.setIconSize(QtCore.QSize(14, 14))
+        self.addToolBarBreak(QtCore.Qt.TopToolBarArea)
+        self.addToolBar(QtCore.Qt.TopToolBarArea, secondary_toolbar)
+
+        pan_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowLeft), "平移", self)
+        pan_action.triggered.connect(self.set_pan_mode)
+        secondary_toolbar.addAction(pan_action)
+
+        zoom_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowUp), "缩放", self)
+        zoom_action.triggered.connect(self.set_zoom_mode)
+        secondary_toolbar.addAction(zoom_action)
+
+        rotate_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_BrowserReload), "旋转", self)
+        rotate_action.triggered.connect(self.set_rotate_mode)
+        secondary_toolbar.addAction(rotate_action)
+
+        secondary_toolbar.addSeparator()
+
+        distance_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_LineEditClearButton), "距离", self)
+        distance_action.triggered.connect(self.measure_distance)
+        secondary_toolbar.addAction(distance_action)
+
+        angle_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_FileDialogDetailedView), "角度", self)
+        angle_action.triggered.connect(self.measure_angle)
+        secondary_toolbar.addAction(angle_action)
+
+        secondary_toolbar.addSeparator()
+
+        mip_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ComputerIcon), "MIP(Z)", self)
+        mip_action.triggered.connect(lambda: self.create_mip_projection(axis=0, use_roi=True))
+        secondary_toolbar.addAction(mip_action)
+
+        minip_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_TitleBarShadeButton), "MinIP(Z)", self)
+        minip_action.triggered.connect(lambda: self.create_minip_projection(axis=0, use_roi=True))
+        secondary_toolbar.addAction(minip_action)
+
+        # 第三排：开关与步进（贴近专业软件）
+        tertiary_toolbar = QtWidgets.QToolBar("交互工具栏", self)
+        tertiary_toolbar.setMovable(False)
+        tertiary_toolbar.setIconSize(QtCore.QSize(14, 14))
+        self.addToolBarBreak(QtCore.Qt.TopToolBarArea)
+        self.addToolBar(QtCore.Qt.TopToolBarArea, tertiary_toolbar)
+
+        link_views_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_CommandLink), "联动", self)
+        link_views_action.setCheckable(True)
+        link_views_action.setChecked(True)
+        tertiary_toolbar.addAction(link_views_action)
+
+        show_cross_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DialogYesButton), "十字线", self)
+        show_cross_action.setCheckable(True)
+        show_cross_action.setChecked(True)
+        show_cross_action.triggered.connect(lambda checked: self.chk_show_crosshair.setChecked(checked) if hasattr(self, 'chk_show_crosshair') else None)
+        tertiary_toolbar.addAction(show_cross_action)
+
+        tertiary_toolbar.addSeparator()
+        tertiary_toolbar.addWidget(QtWidgets.QLabel("步进"))
+        self.slice_step_spin = QtWidgets.QSpinBox()
+        self.slice_step_spin.setRange(1, 50)
+        self.slice_step_spin.setValue(1)
+        self.slice_step_spin.setFixedWidth(52)
+        tertiary_toolbar.addWidget(self.slice_step_spin)
     
     def create_menu(self):
         """创建菜单栏"""
@@ -187,9 +378,23 @@ class UIComponents:
         
         # 文件菜单
         file_menu = self.menu_bar.addMenu("文件")
-        import_action = QtWidgets.QAction("导入文件", self)
+        import_action = QtWidgets.QAction("打开影像...", self)
         import_action.triggered.connect(self.import_file)
         file_menu.addAction(import_action)
+
+        save_session_action = QtWidgets.QAction("保存会话...", self)
+        save_session_action.triggered.connect(self.save_current_session)
+        file_menu.addAction(save_session_action)
+
+        file_menu.addSeparator()
+
+        import_dicom_action = QtWidgets.QAction("导入 DICOM...", self)
+        import_dicom_action.triggered.connect(self.import_dicom_series)
+        file_menu.addAction(import_dicom_action)
+
+        export_dicom_action = QtWidgets.QAction("导出 DICOM...", self)
+        export_dicom_action.triggered.connect(self.export_dicom_series)
+        file_menu.addAction(export_dicom_action)
 
         # 新增：导出切片为 TIFF（无符号16位）
         export_slices_action = QtWidgets.QAction("导出切片为TIFF...", self)
@@ -200,9 +405,17 @@ class UIComponents:
         import_slices_action = QtWidgets.QAction("从切片重建...", self)
         import_slices_action.triggered.connect(lambda: getattr(self, 'import_slices_dialog', lambda: None)())
         file_menu.addAction(import_slices_action)
-        
-        # 滤波菜单
-        filter_menu = self.menu_bar.addMenu("滤波")
+
+        file_menu.addSeparator()
+        new_session_action = QtWidgets.QAction("新建会话", self)
+        new_session_action.triggered.connect(self.start_new_session)
+        file_menu.addAction(new_session_action)
+
+        # 工具菜单
+        tools_menu = self.menu_bar.addMenu("工具")
+
+        # 滤波子菜单
+        filter_menu = tools_menu.addMenu("滤波")
         
         curvature_action = QtWidgets.QAction("曲率流去噪", self)
         curvature_action.triggered.connect(self.apply_curvature_flow_filter)
@@ -221,7 +434,7 @@ class UIComponents:
         filter_menu.addAction(bilateral_action)
         
         # 图像增强菜单
-        enhance_menu = self.menu_bar.addMenu("图像增强")
+        enhance_menu = tools_menu.addMenu("图像增强")
         
         hist_eq_action = QtWidgets.QAction("直方图均衡化", self)
         hist_eq_action.triggered.connect(self.apply_histogram_equalization)
@@ -244,7 +457,7 @@ class UIComponents:
         enhance_menu.addAction(fuzzy_enhance_action)
         
         # CT重建菜单
-        ct_menu = self.menu_bar.addMenu("CT重建")
+        ct_menu = tools_menu.addMenu("CT重建")
         
         helical_ct_action = QtWidgets.QAction("CT螺旋重建", self)
         helical_ct_action.triggered.connect(self.run_helical_ct_reconstruction)
@@ -255,7 +468,7 @@ class UIComponents:
         ct_menu.addAction(circle_ct_action)
         
         # 传统分割检测菜单
-        traditional_seg_menu = self.menu_bar.addMenu("传统分割检测")
+        traditional_seg_menu = tools_menu.addMenu("传统分割检测")
         region_growing_action = QtWidgets.QAction("区域生长", self)
         region_growing_action.triggered.connect(self.run_region_growing)
         traditional_seg_menu.addAction(region_growing_action)
@@ -269,16 +482,16 @@ class UIComponents:
         traditional_seg_menu.addAction(threshold_action)
         
         # 人工智能分割菜单
-        ai_menu = self.menu_bar.addMenu("人工智能分割")
+        ai_menu = tools_menu.addMenu("人工智能分割")
         unet_action = QtWidgets.QAction("基线方法", self)
         unet_action.triggered.connect(self.run_unet_segmentation)
         ai_menu.addAction(unet_action)
         
         # 配准菜单（占位）
-        config_menu = self.menu_bar.addMenu("配准")
+        config_menu = tools_menu.addMenu("配准")
         
         # 测量菜单
-        measure_menu = self.menu_bar.addMenu("人工标记测量")
+        measure_menu = tools_menu.addMenu("人工标记测量")
         distance_action = QtWidgets.QAction("线段距离", self)
         distance_action.triggered.connect(self.measure_distance)
         measure_menu.addAction(distance_action)
@@ -293,7 +506,7 @@ class UIComponents:
         measure_menu.addAction(surface_area_action)
 
         # 投影菜单（MIP / MinIP）
-        proj_menu = self.menu_bar.addMenu("投影")
+        proj_menu = tools_menu.addMenu("投影")
 
         mip_menu = proj_menu.addMenu("最大密度投影 (MIP)")
         mip_z = QtWidgets.QAction("沿 Z 轴 (Axial)", self)
@@ -316,6 +529,34 @@ class UIComponents:
         minip_x = QtWidgets.QAction("沿 X 轴 (Sagittal)", self)
         minip_x.triggered.connect(lambda: self.create_minip_projection(axis=2, use_roi=True))
         minip_menu.addAction(minip_x)
+
+        # 开发者工具
+        dev_menu = self.menu_bar.addMenu("开发者工具")
+        python_console_action = QtWidgets.QAction("Python脚本控制台", self)
+        python_console_action.triggered.connect(self.open_python_console)
+        dev_menu.addAction(python_console_action)
+
+        macro_action = QtWidgets.QAction("宏录制", self)
+        macro_action.triggered.connect(self.toggle_macro_recording)
+        dev_menu.addAction(macro_action)
+
+        debug_action = QtWidgets.QAction("调试接口", self)
+        debug_action.triggered.connect(self.open_debug_interface)
+        dev_menu.addAction(debug_action)
+
+        # 帮助菜单
+        help_menu = self.menu_bar.addMenu("帮助")
+        docs_action = QtWidgets.QAction("文档", self)
+        docs_action.triggered.connect(self.open_help_docs)
+        help_menu.addAction(docs_action)
+
+        version_action = QtWidgets.QAction("版本信息", self)
+        version_action.triggered.connect(self.show_version_info)
+        help_menu.addAction(version_action)
+
+        support_action = QtWidgets.QAction("技术支持", self)
+        support_action.triggered.connect(self.contact_support)
+        help_menu.addAction(support_action)
         
         # 使用QMainWindow的setMenuBar方法，菜单栏会自动显示在窗口顶部
         self.setMenuBar(self.menu_bar)
@@ -327,18 +568,53 @@ class UIComponents:
         
         # 创建左侧工具栏（垂直布局）
         self.left_toolbar = QtWidgets.QWidget()
-        self.left_toolbar.setMaximumWidth(220)
-        self.left_toolbar.setMinimumWidth(180)
+        self.left_toolbar.setMaximumWidth(250)
+        self.left_toolbar.setMinimumWidth(210)
         self.left_toolbar.setStyleSheet("""
             QWidget {
-                background-color: #eceff1;
+                background-color: #303030;
+                border-right: 1px solid #1f1f1f;
             }
         """)
         toolbar_layout = QtWidgets.QVBoxLayout(self.left_toolbar)
-        toolbar_layout.setContentsMargins(8, 8, 8, 8)
-        toolbar_layout.setSpacing(10)
+        toolbar_layout.setContentsMargins(4, 4, 4, 4)
+        toolbar_layout.setSpacing(4)
+
+        # 左侧标签页：主控台 / 图像分割
+        left_tabs = QtWidgets.QTabWidget()
+        left_tabs.setDocumentMode(True)
+        left_tabs.setTabPosition(QtWidgets.QTabWidget.North)
+
+        # ------------------------ 主控台标签页 ------------------------
+        main_console = QtWidgets.QWidget()
+        main_console_layout = QtWidgets.QVBoxLayout(main_console)
+        main_console_layout.setContentsMargins(2, 2, 2, 2)
+        main_console_layout.setSpacing(4)
+
+        # 操作区
+        ops_group = QtWidgets.QGroupBox("操作区")
+        ops_layout = QtWidgets.QGridLayout(ops_group)
+        ops_layout.setSpacing(4)
+        ops_buttons = [
+            ("平移", self.set_pan_mode),
+            ("缩放", self.set_zoom_mode),
+            ("旋转", self.set_rotate_mode),
+            ("翻转", self.flip_current_view),
+            ("重置视图", self.reset_view_transform),
+            ("定位十字线", self.enable_crosshair_mode),
+            ("上一切片", self.goto_prev_slice),
+            ("下一切片", self.goto_next_slice),
+        ]
+        for idx, (text, callback) in enumerate(ops_buttons):
+            btn = QtWidgets.QToolButton()
+            btn.setText(text)
+            btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+            btn.clicked.connect(callback)
+            btn.setMinimumHeight(22)
+            ops_layout.addWidget(btn, idx // 2, idx % 2)
+        main_console_layout.addWidget(ops_group)
         
-        # 创建窗宽窗位分组框
+        # 窗位/窗宽
         ww_wl_group = QtWidgets.QGroupBox("窗宽窗位")
         ww_wl_group.setStyleSheet("QGroupBox { font-weight: bold; padding-top: 10px; }")
         ww_wl_group_layout = QtWidgets.QVBoxLayout(ww_wl_group)
@@ -358,7 +634,7 @@ class UIComponents:
         
         self.ww_value = QtWidgets.QLabel("65535")
         self.ww_value.setAlignment(QtCore.Qt.AlignCenter)
-        self.ww_value.setStyleSheet("QLabel { font-weight: normal; background-color: #e8f4f8; padding: 5px; border: 1px solid #b0d4e3; border-radius: 3px; }")
+        self.ww_value.setStyleSheet("QLabel { font-weight: normal; background-color: #252525; color: #dcdcdc; padding: 3px; border: 1px solid #555; border-radius: 2px; }")
         ww_wl_group_layout.addWidget(self.ww_value)
         
         ww_wl_group_layout.addSpacing(5)
@@ -377,7 +653,7 @@ class UIComponents:
         
         self.wl_value = QtWidgets.QLabel("32767")
         self.wl_value.setAlignment(QtCore.Qt.AlignCenter)
-        self.wl_value.setStyleSheet("QLabel { font-weight: normal; background-color: #e8f4f8; padding: 5px; border: 1px solid #b0d4e3; border-radius: 3px; }")
+        self.wl_value.setStyleSheet("QLabel { font-weight: normal; background-color: #252525; color: #dcdcdc; padding: 3px; border: 1px solid #555; border-radius: 2px; }")
         ww_wl_group_layout.addWidget(self.wl_value)
         
         ww_wl_group_layout.addSpacing(5)
@@ -388,9 +664,165 @@ class UIComponents:
         reset_btn.clicked.connect(self.reset_window_level)
         ww_wl_group_layout.addWidget(reset_btn)
         
-        # 将分组框添加到工具栏
-        toolbar_layout.addWidget(ww_wl_group)
-        toolbar_layout.addStretch()
+        main_console_layout.addWidget(ww_wl_group)
+
+        # 标注区
+        annotation_group = QtWidgets.QGroupBox("标注区")
+        annotation_layout = QtWidgets.QGridLayout(annotation_group)
+        annotation_layout.setSpacing(4)
+        annotation_buttons = [
+            ("画笔", self.start_brush_annotation),
+            ("橡皮擦", self.start_eraser_annotation),
+            ("ROI绘制", self.roi_selection_start),
+            ("长度", self.measure_distance),
+            ("角度", self.measure_angle),
+            ("面积", self.measure_area_placeholder),
+            ("体积", self.measure_volume_placeholder),
+            ("文本", self.add_text_annotation),
+        ]
+        for idx, (text, callback) in enumerate(annotation_buttons):
+            btn = QtWidgets.QToolButton()
+            btn.setText(text)
+            btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+            btn.clicked.connect(callback)
+            btn.setMinimumHeight(22)
+            annotation_layout.addWidget(btn, idx // 2, idx % 2)
+        main_console_layout.addWidget(annotation_group)
+
+        # 移动区
+        move_group = QtWidgets.QGroupBox("移动区")
+        move_layout = QtWidgets.QVBoxLayout(move_group)
+        self.chk_dynamic_refresh = QtWidgets.QCheckBox("动态刷新")
+        self.chk_dynamic_refresh.setChecked(True)
+        self.chk_interactive_probe = QtWidgets.QCheckBox("探头定位")
+        move_layout.addWidget(self.chk_dynamic_refresh)
+        move_layout.addWidget(self.chk_interactive_probe)
+        main_console_layout.addWidget(move_group)
+
+        # 场景视图属性
+        scene_group = QtWidgets.QGroupBox("场景视图属性")
+        scene_layout = QtWidgets.QVBoxLayout(scene_group)
+        self.chk_show_scale = QtWidgets.QCheckBox("显示比例尺")
+        self.chk_show_scale.setChecked(True)
+        self.chk_show_legend = QtWidgets.QCheckBox("显示图例")
+        self.chk_show_annotations = QtWidgets.QCheckBox("显示文字注释")
+        self.chk_show_annotations.setChecked(True)
+        self.chk_show_crosshair = QtWidgets.QCheckBox("显示十字线")
+        self.chk_show_crosshair.setChecked(True)
+        self.chk_orthogonal_projection = QtWidgets.QCheckBox("正交投影")
+        self.chk_reduce_quality_during_op = QtWidgets.QCheckBox("操作时降低画质")
+        self.chk_best_quality = QtWidgets.QCheckBox("最优质量")
+        self.chk_best_quality.setChecked(True)
+        self.chk_show_orientation = QtWidgets.QCheckBox("显示方向信息")
+        self.chk_show_orientation.setChecked(True)
+        for widget in [
+            self.chk_show_scale, self.chk_show_legend, self.chk_show_annotations,
+            self.chk_show_crosshair, self.chk_orthogonal_projection,
+            self.chk_reduce_quality_during_op, self.chk_best_quality,
+            self.chk_show_orientation
+        ]:
+            scene_layout.addWidget(widget)
+
+        mode_row = QtWidgets.QHBoxLayout()
+        mode_row.addWidget(QtWidgets.QLabel("视图模式:"))
+        self.view_mode_combo = QtWidgets.QComboBox()
+        self.view_mode_combo.addItems(["2D", "3D", "2D+3D"])
+        mode_row.addWidget(self.view_mode_combo)
+        scene_layout.addLayout(mode_row)
+
+        render_row = QtWidgets.QHBoxLayout()
+        render_row.addWidget(QtWidgets.QLabel("渲染模式:"))
+        self.render_mode_combo = QtWidgets.QComboBox()
+        self.render_mode_combo.addItems(["默认", "MIP", "MinIP", "表面渲染", "体渲染"])
+        self.render_mode_combo.currentTextChanged.connect(self.on_render_mode_changed)
+        render_row.addWidget(self.render_mode_combo)
+        scene_layout.addLayout(render_row)
+
+        bg_btn = QtWidgets.QPushButton("背景颜色")
+        bg_btn.clicked.connect(self.change_background_color)
+        scene_layout.addWidget(bg_btn)
+        main_console_layout.addWidget(scene_group)
+
+        # 光照设置
+        light_group = QtWidgets.QGroupBox("光照设置")
+        light_form = QtWidgets.QFormLayout(light_group)
+        self.light_pos_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.light_pos_slider.setRange(0, 100)
+        self.light_pos_slider.setValue(50)
+        self.light_intensity_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.light_intensity_slider.setRange(0, 100)
+        self.light_intensity_slider.setValue(60)
+        self.shadow_strength_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.shadow_strength_slider.setRange(0, 100)
+        self.shadow_strength_slider.setValue(40)
+        self.shadow_alpha_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.shadow_alpha_slider.setRange(0, 100)
+        self.shadow_alpha_slider.setValue(50)
+        self.brightness_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.brightness_slider.setRange(0, 100)
+        self.brightness_slider.setValue(50)
+        self.spot_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.spot_slider.setRange(0, 100)
+        self.spot_slider.setValue(30)
+        self.specular_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.specular_slider.setRange(0, 100)
+        self.specular_slider.setValue(35)
+        self.scatter_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.scatter_slider.setRange(0, 100)
+        self.scatter_slider.setValue(45)
+        light_form.addRow("光源位置", self.light_pos_slider)
+        light_form.addRow("光线照明", self.light_intensity_slider)
+        light_form.addRow("阴影强度", self.shadow_strength_slider)
+        light_form.addRow("阴影透明度", self.shadow_alpha_slider)
+        light_form.addRow("光亮", self.brightness_slider)
+        light_form.addRow("聚光灯", self.spot_slider)
+        light_form.addRow("镜面反光", self.specular_slider)
+        light_form.addRow("散射", self.scatter_slider)
+        main_console_layout.addWidget(light_group)
+
+        # 聚焦
+        focus_group = QtWidgets.QGroupBox("聚焦")
+        focus_layout = QtWidgets.QFormLayout(focus_group)
+        self.chk_auto_focus = QtWidgets.QCheckBox("自动对焦")
+        self.chk_auto_focus.setChecked(True)
+        self.focus_distance_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.focus_distance_slider.setRange(0, 100)
+        self.focus_distance_slider.setValue(40)
+        self.depth_of_field_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.depth_of_field_slider.setRange(0, 100)
+        self.depth_of_field_slider.setValue(30)
+        focus_layout.addRow(self.chk_auto_focus)
+        focus_layout.addRow("焦距", self.focus_distance_slider)
+        focus_layout.addRow("景深", self.depth_of_field_slider)
+        main_console_layout.addWidget(focus_group)
+
+        # 单位与导出
+        unit_group = QtWidgets.QGroupBox("单位与导出")
+        unit_layout = QtWidgets.QVBoxLayout(unit_group)
+        unit_row = QtWidgets.QHBoxLayout()
+        unit_row.addWidget(QtWidgets.QLabel("长度单位"))
+        self.unit_combo = QtWidgets.QComboBox()
+        self.unit_combo.addItems(["mm", "cm", "μm"])
+        unit_row.addWidget(self.unit_combo)
+        unit_layout.addLayout(unit_row)
+        export_screen_btn = QtWidgets.QPushButton("导出截屏")
+        export_screen_btn.clicked.connect(self.export_screenshot)
+        unit_layout.addWidget(export_screen_btn)
+        main_console_layout.addWidget(unit_group)
+
+        # 2D视图
+        view2d_group = QtWidgets.QGroupBox("2D视图")
+        view2d_layout = QtWidgets.QGridLayout(view2d_group)
+        view2d_layout.setSpacing(4)
+        side_btn = QtWidgets.QToolButton(); side_btn.setText("侧视图"); side_btn.clicked.connect(lambda: self.switch_2d_view("side"))
+        front_btn = QtWidgets.QToolButton(); front_btn.setText("正视图"); front_btn.clicked.connect(lambda: self.switch_2d_view("front"))
+        back_btn = QtWidgets.QToolButton(); back_btn.setText("后视图"); back_btn.clicked.connect(lambda: self.switch_2d_view("back"))
+        plane_btn = QtWidgets.QToolButton(); plane_btn.setText("可视平面"); plane_btn.clicked.connect(self.configure_visible_plane)
+        view2d_layout.addWidget(side_btn, 0, 0)
+        view2d_layout.addWidget(front_btn, 0, 1)
+        view2d_layout.addWidget(back_btn, 1, 0)
+        view2d_layout.addWidget(plane_btn, 1, 1)
+        main_console_layout.addWidget(view2d_group)
         
         # 创建ROI分组框
         roi_group = QtWidgets.QGroupBox("3D 感兴趣区域")
@@ -441,7 +873,7 @@ class UIComponents:
         
         self.roi_depth_min_value = QtWidgets.QLabel("0")
         self.roi_depth_min_value.setAlignment(QtCore.Qt.AlignCenter)
-        self.roi_depth_min_value.setStyleSheet("QLabel { font-weight: normal; background-color: #e6f2ff; padding: 2px; border: 1px solid #99ccff; border-radius: 3px; min-width: 40px; }")
+        self.roi_depth_min_value.setStyleSheet("QLabel { font-weight: normal; background-color: #252525; color: #dcdcdc; padding: 2px; border: 1px solid #555; border-radius: 2px; min-width: 40px; }")
         self.roi_depth_min_slider.valueChanged.connect(lambda v: self.roi_depth_min_value.setText(str(v)))
         depth_min_layout.addWidget(self.roi_depth_min_value)
         
@@ -462,7 +894,7 @@ class UIComponents:
         
         self.roi_depth_max_value = QtWidgets.QLabel("100")
         self.roi_depth_max_value.setAlignment(QtCore.Qt.AlignCenter)
-        self.roi_depth_max_value.setStyleSheet("QLabel { font-weight: normal; background-color: #e6f2ff; padding: 2px; border: 1px solid #99ccff; border-radius: 3px; min-width: 40px; }")
+        self.roi_depth_max_value.setStyleSheet("QLabel { font-weight: normal; background-color: #252525; color: #dcdcdc; padding: 2px; border: 1px solid #555; border-radius: 2px; min-width: 40px; }")
         self.roi_depth_max_slider.valueChanged.connect(lambda v: self.roi_depth_max_value.setText(str(v)))
         depth_max_layout.addWidget(self.roi_depth_max_value)
         
@@ -489,8 +921,82 @@ class UIComponents:
         
         roi_group_layout.addLayout(roi_io_layout)
         
-        # 将ROI分组框添加到工具栏
-        toolbar_layout.insertWidget(1, roi_group)
+        # 主控台补充ROI设置
+        main_console_layout.addWidget(roi_group)
+        main_console_layout.addStretch()
+
+        # 滚动容器（主控台控件较多）
+        main_scroll = QtWidgets.QScrollArea()
+        main_scroll.setWidget(main_console)
+        main_scroll.setWidgetResizable(True)
+        main_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+
+        # ------------------------ 图像分割标签页 ------------------------
+        segmentation_tab = QtWidgets.QWidget()
+        segmentation_layout = QtWidgets.QVBoxLayout(segmentation_tab)
+        segmentation_layout.setContentsMargins(2, 2, 2, 2)
+        segmentation_layout.setSpacing(4)
+
+        ai_seg_group = QtWidgets.QGroupBox("AI / 深度学习分割")
+        ai_seg_layout = QtWidgets.QVBoxLayout(ai_seg_group)
+        ai_auto_btn = QtWidgets.QPushButton("一键自动分割")
+        ai_auto_btn.clicked.connect(self.run_unet_segmentation)
+        ai_seg_layout.addWidget(ai_auto_btn)
+        segmentation_layout.addWidget(ai_seg_group)
+
+        manual_seg_group = QtWidgets.QGroupBox("手动分割")
+        manual_seg_layout = QtWidgets.QGridLayout(manual_seg_group)
+        manual_seg_layout.setSpacing(4)
+        manual_buttons = [
+            ("画笔", self.start_brush_annotation),
+            ("阈值", self.run_threshold_segmentation),
+            ("区域生长", self.run_region_growing),
+            ("OTSU", self.run_otsu_segmentation),
+        ]
+        for idx, (text, callback) in enumerate(manual_buttons):
+            btn = QtWidgets.QToolButton()
+            btn.setText(text)
+            btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+            btn.clicked.connect(callback)
+            btn.setMinimumHeight(22)
+            manual_seg_layout.addWidget(btn, idx // 2, idx % 2)
+        segmentation_layout.addWidget(manual_seg_group)
+
+        post_seg_group = QtWidgets.QGroupBox("分割后处理")
+        post_seg_layout = QtWidgets.QGridLayout(post_seg_group)
+        post_seg_layout.setSpacing(4)
+        post_buttons = [
+            ("平滑", self.postprocess_smooth),
+            ("填充", self.postprocess_fill),
+            ("裁剪", self.postprocess_crop),
+            ("布尔运算", self.postprocess_boolean),
+        ]
+        for idx, (text, callback) in enumerate(post_buttons):
+            btn = QtWidgets.QToolButton()
+            btn.setText(text)
+            btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+            btn.clicked.connect(callback)
+            btn.setMinimumHeight(22)
+            post_seg_layout.addWidget(btn, idx // 2, idx % 2)
+        segmentation_layout.addWidget(post_seg_group)
+
+        result_group = QtWidgets.QGroupBox("分割结果管理")
+        result_layout = QtWidgets.QVBoxLayout(result_group)
+        save_seg_btn = QtWidgets.QPushButton("保存分割")
+        save_seg_btn.clicked.connect(self.save_segmentation_result)
+        load_seg_btn = QtWidgets.QPushButton("加载分割")
+        load_seg_btn.clicked.connect(self.load_segmentation_result)
+        export_model_btn = QtWidgets.QPushButton("导出模型")
+        export_model_btn.clicked.connect(self.export_segmentation_model)
+        result_layout.addWidget(save_seg_btn)
+        result_layout.addWidget(load_seg_btn)
+        result_layout.addWidget(export_model_btn)
+        segmentation_layout.addWidget(result_group)
+        segmentation_layout.addStretch()
+
+        left_tabs.addTab(main_scroll, "主控台")
+        left_tabs.addTab(segmentation_tab, "图像分割")
+        toolbar_layout.addWidget(left_tabs)
         
         # 将左侧工具栏添加到主分割器
         main_splitter.addWidget(self.left_toolbar)
@@ -500,7 +1006,7 @@ class UIComponents:
         
         # 创建中间视图区域
         self.grid_widget = QtWidgets.QWidget()
-        self.grid_widget.setStyleSheet("background-color: #ffffff;")
+        self.grid_widget.setStyleSheet("background-color: #000000;")
         self.grid_layout = QtWidgets.QGridLayout(self.grid_widget)
         self.grid_layout.setSpacing(2)
         self.grid_layout.setContentsMargins(2, 2, 2, 2)
@@ -510,9 +1016,9 @@ class UIComponents:
         
         # 创建右侧面板（垂直分割成上下两部分）
         self.right_panel = QtWidgets.QWidget()
-        self.right_panel.setMaximumWidth(350)
-        self.right_panel.setMinimumWidth(280)
-        self.right_panel.setStyleSheet("background-color: #eceff1;")  # 浅灰色背景
+        self.right_panel.setMaximumWidth(340)
+        self.right_panel.setMinimumWidth(290)
+        self.right_panel.setStyleSheet("background-color: #303030; border-left: 1px solid #1f1f1f;")
         right_panel_layout = QtWidgets.QVBoxLayout(self.right_panel)
         right_panel_layout.setContentsMargins(8, 8, 8, 8)
         right_panel_layout.setSpacing(10)  # 增加两个面板之间的间距
@@ -521,8 +1027,8 @@ class UIComponents:
         data_list_panel = QtWidgets.QWidget()
         data_list_panel.setStyleSheet("""
             QWidget {
-                background-color: #f5f5f5;
-                border: 1px solid #d0d0d0;
+                background-color: #2f2f2f;
+                border: 1px solid #4a4a4a;
                 border-radius: 2px;
             }
         """)
@@ -531,10 +1037,10 @@ class UIComponents:
         data_list_layout.setSpacing(4)
         
         # 标题栏
-        data_list_label = QtWidgets.QLabel("已导入数据列表")
+        data_list_label = QtWidgets.QLabel("图层管理")
         data_list_label.setStyleSheet("""
             QLabel {
-                color: #424242; 
+                color: #d9d9d9; 
                 font-size: 10pt; 
                 font-weight: bold;
                 background-color: transparent;
@@ -549,23 +1055,44 @@ class UIComponents:
         self.data_list_widget = QtWidgets.QListWidget()
         self.data_list_widget.setStyleSheet("""
             QListWidget {
-                background-color: white;
-                border: 1px solid #d0d0d0;
+                background-color: #262626;
+                border: 1px solid #4a4a4a;
                 border-radius: 2px;
                 padding: 2px;
             }
             QListWidget::item {
                 padding: 4px;
-                border-bottom: 1px solid #e0e0e0;
+                border-bottom: 1px solid #3b3b3b;
+                color: #e8e8e8;
             }
             QListWidget::item:hover {
-                background-color: #e3f2fd;
+                background-color: #4c4c4c;
             }
             QListWidget::item:selected {
-                background-color: #bbdefb;
+                background-color: #5d5d5d;
             }
         """)
         data_list_layout.addWidget(self.data_list_widget)
+
+        # 图层可见性与混合设置
+        layer_ctrl_group = QtWidgets.QGroupBox("图层控制")
+        layer_ctrl_layout = QtWidgets.QFormLayout(layer_ctrl_group)
+        self.chk_layer_visible = QtWidgets.QCheckBox("可见")
+        self.chk_layer_visible.setChecked(True)
+        self.layer_opacity_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.layer_opacity_slider.setRange(0, 100)
+        self.layer_opacity_slider.setValue(100)
+        self.layer_blend_combo = QtWidgets.QComboBox()
+        self.layer_blend_combo.addItems(["Normal", "Add", "Multiply", "Screen"])
+        self.layer_mode_combo = QtWidgets.QComboBox()
+        self.layer_mode_combo.addItems(["2D", "3D", "2D/3D"])
+        self.chk_layer_locked = QtWidgets.QCheckBox("锁定图层")
+        layer_ctrl_layout.addRow(self.chk_layer_visible)
+        layer_ctrl_layout.addRow("透明度", self.layer_opacity_slider)
+        layer_ctrl_layout.addRow("混合模式", self.layer_blend_combo)
+        layer_ctrl_layout.addRow("2D/3D", self.layer_mode_combo)
+        layer_ctrl_layout.addRow(self.chk_layer_locked)
+        data_list_layout.addWidget(layer_ctrl_group)
         
         # 添加提示标签
         # data_hint_label = QtWidgets.QLabel("✓ 勾选的数据将显示在视图中")
@@ -589,18 +1116,18 @@ class UIComponents:
         self.remove_data_btn = QtWidgets.QPushButton("删除")
         self.remove_data_btn.setStyleSheet("""
             QPushButton {
-                background-color: #ffebee;
-                color: #c62828;
-                border: 1px solid #ef9a9a;
+                background-color: #4d3535;
+                color: #ffb3b3;
+                border: 1px solid #7d4b4b;
                 border-radius: 3px;
                 padding: 4px 8px;
                 font-size: 9pt;
             }
             QPushButton:hover {
-                background-color: #ffcdd2;
+                background-color: #614141;
             }
             QPushButton:pressed {
-                background-color: #ef9a9a;
+                background-color: #7d4b4b;
             }
         """)
         self.remove_data_btn.clicked.connect(self.remove_selected_data)
@@ -610,31 +1137,46 @@ class UIComponents:
         self.clear_all_data_btn = QtWidgets.QPushButton("清空")
         self.clear_all_data_btn.setStyleSheet("""
             QPushButton {
-                background-color: #fff3e0;
-                color: #e65100;
-                border: 1px solid #ffcc80;
+                background-color: #4d4435;
+                color: #ffd8a8;
+                border: 1px solid #7b6a4e;
                 border-radius: 3px;
                 padding: 4px 8px;
                 font-size: 9pt;
             }
             QPushButton:hover {
-                background-color: #ffe0b2;
+                background-color: #63573f;
             }
             QPushButton:pressed {
-                background-color: #ffcc80;
+                background-color: #7b6a4e;
             }
         """)
         self.clear_all_data_btn.clicked.connect(self.clear_all_data)
         button_layout.addWidget(self.clear_all_data_btn)
         
         data_list_layout.addLayout(button_layout)
+
+        shortcut_layout = QtWidgets.QHBoxLayout()
+        new_layer_btn = QtWidgets.QPushButton("新建")
+        new_layer_btn.clicked.connect(self.create_new_layer)
+        copy_layer_btn = QtWidgets.QPushButton("复制")
+        copy_layer_btn.clicked.connect(self.copy_current_layer)
+        import_layer_btn = QtWidgets.QPushButton("导入")
+        import_layer_btn.clicked.connect(self.import_file)
+        export_layer_btn = QtWidgets.QPushButton("导出")
+        export_layer_btn.clicked.connect(self.export_current_layer)
+        shortcut_layout.addWidget(new_layer_btn)
+        shortcut_layout.addWidget(copy_layer_btn)
+        shortcut_layout.addWidget(import_layer_btn)
+        shortcut_layout.addWidget(export_layer_btn)
+        data_list_layout.addLayout(shortcut_layout)
         
         # 灰度直方图面板（下半部分） - 浅色背景风格
         histogram_panel = QtWidgets.QWidget()
         histogram_panel.setStyleSheet("""
             QWidget {
-                background-color: #f5f5f5;
-                border: 1px solid #d0d0d0;
+                background-color: #2f2f2f;
+                border: 1px solid #4a4a4a;
                 border-radius: 2px;
             }
         """)
@@ -646,7 +1188,7 @@ class UIComponents:
         histogram_label = QtWidgets.QLabel("灰度直方图")
         histogram_label.setStyleSheet("""
             QLabel {
-                color: #424242; 
+                color: #d9d9d9; 
                 font-size: 10pt; 
                 background-color: transparent;
                 border: none;
@@ -657,17 +1199,17 @@ class UIComponents:
         histogram_layout.addWidget(histogram_label)
         
         # 创建matplotlib图形用于显示直方图 - 浅色背景
-        self.histogram_figure = Figure(facecolor='#f5f5f5')
+        self.histogram_figure = Figure(facecolor='#2f2f2f')
         self.histogram_canvas = FigureCanvas(self.histogram_figure)
-        self.histogram_canvas.setStyleSheet("background-color: #f5f5f5;")
+        self.histogram_canvas.setStyleSheet("background-color: #2f2f2f;")
         self.histogram_ax = self.histogram_figure.add_subplot(111)
         
         # 初始化空直方图 - 浅色背景
-        self.histogram_ax.set_facecolor('white')
+        self.histogram_ax.set_facecolor('#1f1f1f')
         self.histogram_ax.text(0.5, 0.5, '等待数据导入', 
                               transform=self.histogram_ax.transAxes,
                               ha='center', va='center',
-                              fontsize=10, color='#999999')
+                      fontsize=10, color='#9b9b9b')
         
         # 隐藏所有坐标轴和刻度
         self.histogram_ax.set_xticks([])
@@ -692,10 +1234,167 @@ class UIComponents:
         self.histogram_canvas.draw()
         
         histogram_layout.addWidget(self.histogram_canvas, 1)  # 添加stretch factor让画布填充
+
+        # 属性设置面板（界面复刻）
+        property_panel = QtWidgets.QWidget()
+        property_panel.setStyleSheet("""
+            QWidget {
+                background-color: #2f2f2f;
+                border: 1px solid #4a4a4a;
+                border-radius: 2px;
+            }
+        """)
+        property_layout = QtWidgets.QVBoxLayout(property_panel)
+        property_layout.setContentsMargins(6, 6, 6, 6)
+        property_layout.setSpacing(6)
+
+        property_title = QtWidgets.QLabel("数据属性和设定")
+        property_title.setAlignment(QtCore.Qt.AlignLeft)
+        property_title.setStyleSheet("QLabel { font-weight: bold; color: #dedede; border: none; }")
+        property_layout.addWidget(property_title)
+
+        info_form = QtWidgets.QFormLayout()
+        self.prop_size_label = QtWidgets.QLabel("- x - x -")
+        self.prop_spacing_label = QtWidgets.QLabel("- x - x -")
+        self.prop_type_label = QtWidgets.QLabel("-")
+        self.prop_window_label = QtWidgets.QLabel("W: -, L: -")
+        info_form.addRow("尺寸:", self.prop_size_label)
+        info_form.addRow("间距:", self.prop_spacing_label)
+        info_form.addRow("类型:", self.prop_type_label)
+        info_form.addRow("窗宽/窗位:", self.prop_window_label)
+        property_layout.addLayout(info_form)
+
+        basic_meta_group = QtWidgets.QGroupBox("基本属性")
+        basic_meta_layout = QtWidgets.QFormLayout(basic_meta_group)
+        self.prop_width_label = QtWidgets.QLabel("-")
+        self.prop_height_label = QtWidgets.QLabel("-")
+        self.prop_slice_count_label = QtWidgets.QLabel("-")
+        self.prop_spacing_xyz_label = QtWidgets.QLabel("-")
+        self.prop_format_label = QtWidgets.QLabel("-")
+        basic_meta_layout.addRow("宽度", self.prop_width_label)
+        basic_meta_layout.addRow("高度", self.prop_height_label)
+        basic_meta_layout.addRow("切片数", self.prop_slice_count_label)
+        basic_meta_layout.addRow("体素大小", self.prop_spacing_xyz_label)
+        basic_meta_layout.addRow("文件格式", self.prop_format_label)
+        self.preview_thumb_label = QtWidgets.QLabel("预览")
+        self.preview_thumb_label.setMinimumHeight(90)
+        self.preview_thumb_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.preview_thumb_label.setStyleSheet("QLabel { background-color: #1f1f1f; border: 1px solid #4a4a4a; color: #888; }")
+        basic_meta_layout.addRow("预览", self.preview_thumb_label)
+        property_layout.addWidget(basic_meta_group)
+
+        setting_group = QtWidgets.QGroupBox("2D 设置")
+        setting_layout = QtWidgets.QVBoxLayout(setting_group)
+        alpha_row = QtWidgets.QHBoxLayout()
+        alpha_row.addWidget(QtWidgets.QLabel("透明度"))
+        self.alpha_slider_2d = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.alpha_slider_2d.setRange(0, 100)
+        self.alpha_slider_2d.setValue(100)
+        alpha_row.addWidget(self.alpha_slider_2d)
+        setting_layout.addLayout(alpha_row)
+
+        lut_row = QtWidgets.QHBoxLayout()
+        lut_row.addWidget(QtWidgets.QLabel("2D LUT"))
+        self.lut_2d_combo = QtWidgets.QComboBox()
+        self.lut_2d_combo.addItems(["grayscale", "hot", "bone", "jet"])
+        lut_row.addWidget(self.lut_2d_combo)
+        setting_layout.addLayout(lut_row)
+
+        self.chk_use_alpha_lut = QtWidgets.QCheckBox("使用 alpha LUT")
+        setting_layout.addWidget(self.chk_use_alpha_lut)
+
+        interp_row = QtWidgets.QHBoxLayout()
+        interp_row.addWidget(QtWidgets.QLabel("插值"))
+        self.interp_2d_combo = QtWidgets.QComboBox()
+        self.interp_2d_combo.addItems(["线性", "最近邻"])
+        interp_row.addWidget(self.interp_2d_combo)
+        setting_layout.addLayout(interp_row)
+
+        self.chk_sync_views = QtWidgets.QCheckBox("同步切片")
+        self.chk_sync_views.setChecked(True)
+        self.chk_show_overlay = QtWidgets.QCheckBox("显示叠加层")
+        self.chk_show_overlay.setChecked(True)
+        self.chk_enable_interpolation = QtWidgets.QCheckBox("启用插值")
+        setting_layout.addWidget(self.chk_sync_views)
+        setting_layout.addWidget(self.chk_show_overlay)
+        setting_layout.addWidget(self.chk_enable_interpolation)
+        property_layout.addWidget(setting_group)
+
+        preset_group = QtWidgets.QGroupBox("3D 预设")
+        preset_layout = QtWidgets.QGridLayout(preset_group)
+        preset_layout.setSpacing(4)
+        preset_defs = ["骨骼", "血管", "CTA", "软组织", "高对比", "低噪声"]
+        for idx, name in enumerate(preset_defs):
+            btn = QtWidgets.QToolButton()
+            btn.setText(name)
+            btn.clicked.connect(lambda _, n=name: self.apply_3d_preset(n))
+            preset_layout.addWidget(btn, idx // 3, idx % 3)
+        property_layout.addWidget(preset_group)
+
+        setting3d_group = QtWidgets.QGroupBox("3D 设置")
+        setting3d_layout = QtWidgets.QVBoxLayout(setting3d_group)
+        opacity3d_row = QtWidgets.QHBoxLayout()
+        opacity3d_row.addWidget(QtWidgets.QLabel("透明度"))
+        self.opacity_3d_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.opacity_3d_slider.setRange(0, 100)
+        self.opacity_3d_slider.setValue(80)
+        opacity3d_row.addWidget(self.opacity_3d_slider)
+        setting3d_layout.addLayout(opacity3d_row)
+
+        self.chk_absolute_lut = QtWidgets.QCheckBox("绝对 LUT")
+        self.chk_flip_roi_lut = QtWidgets.QCheckBox("Flip ROI LUT")
+        self.chk_gamma_enhance = QtWidgets.QCheckBox("伽马增强")
+        self.chk_stereo_interp = QtWidgets.QCheckBox("立体插值")
+        setting3d_layout.addWidget(self.chk_absolute_lut)
+        setting3d_layout.addWidget(self.chk_flip_roi_lut)
+        setting3d_layout.addWidget(self.chk_gamma_enhance)
+        setting3d_layout.addWidget(self.chk_stereo_interp)
+
+        self.chk_3d_shading = QtWidgets.QCheckBox("高质量渲染")
+        self.chk_3d_shading.setChecked(True)
+        self.chk_3d_edge_enhance = QtWidgets.QCheckBox("边缘增强")
+        self.chk_3d_hard_gradient = QtWidgets.QCheckBox("Hard gradient")
+        self.chk_3d_gradient = QtWidgets.QCheckBox("梯度增强")
+        self.chk_3d_gradient.setChecked(True)
+        setting3d_layout.addWidget(self.chk_3d_shading)
+        setting3d_layout.addWidget(self.chk_3d_edge_enhance)
+        setting3d_layout.addWidget(self.chk_3d_hard_gradient)
+        setting3d_layout.addWidget(self.chk_3d_gradient)
+
+        lut3d_row = QtWidgets.QHBoxLayout()
+        lut3d_row.addWidget(QtWidgets.QLabel("3D LUT"))
+        self.lut_3d_combo = QtWidgets.QComboBox()
+        self.lut_3d_combo.addItems(["grayscale", "bone", "coolwarm"])
+        lut3d_row.addWidget(self.lut_3d_combo)
+        setting3d_layout.addLayout(lut3d_row)
+        property_layout.addWidget(setting3d_group)
+
+        extension_group = QtWidgets.QGroupBox("扩展")
+        extension_layout = QtWidgets.QFormLayout(extension_group)
+        self.chk_axis_equalize = QtWidgets.QCheckBox("均摊(X/Y/Z)")
+        distance_btn = QtWidgets.QPushButton("距离")
+        distance_btn.clicked.connect(self.measure_distance)
+        crop_grid_row = QtWidgets.QHBoxLayout()
+        self.crop_x = QtWidgets.QSpinBox(); self.crop_x.setRange(1, 9999); self.crop_x.setValue(1)
+        self.crop_y = QtWidgets.QSpinBox(); self.crop_y.setRange(1, 9999); self.crop_y.setValue(1)
+        self.crop_z = QtWidgets.QSpinBox(); self.crop_z.setRange(1, 9999); self.crop_z.setValue(1)
+        crop_grid_row.addWidget(self.crop_x)
+        crop_grid_row.addWidget(self.crop_y)
+        crop_grid_row.addWidget(self.crop_z)
+        crop_preview_btn = QtWidgets.QPushButton("展示效果")
+        crop_preview_btn.clicked.connect(self.preview_crop_effect)
+        extension_layout.addRow(self.chk_axis_equalize)
+        extension_layout.addRow(distance_btn)
+        extension_layout.addRow("网格尺寸", crop_grid_row)
+        extension_layout.addRow(crop_preview_btn)
+        property_layout.addWidget(extension_group)
         
-        # 将两个面板添加到右侧布局（上下排列，各占50%）
-        right_panel_layout.addWidget(data_list_panel, 1)
-        right_panel_layout.addWidget(histogram_panel, 1)
+        # 右侧折叠面板布局（更接近专业软件）
+        right_toolbox = QtWidgets.QToolBox()
+        right_toolbox.addItem(data_list_panel, "数据属性和设定")
+        right_toolbox.addItem(property_panel, "属性设置")
+        right_toolbox.addItem(histogram_panel, "灰度直方图")
+        right_panel_layout.addWidget(right_toolbox, 1)
         
         # 将右侧面板添加到主分割器
         main_splitter.addWidget(self.right_panel)
@@ -707,7 +1406,7 @@ class UIComponents:
         
         # 设置初始分割比例
         total_width = 1600  # 假设的总宽度
-        main_splitter.setSizes([200, 1050, 350])  # 左侧:中间:右侧 的比例
+        main_splitter.setSizes([230, 1030, 320])  # 左侧:中间:右侧 的比例
         
         # 使用QMainWindow的setCentralWidget方法设置中心部件
         self.setCentralWidget(main_splitter)
@@ -716,8 +1415,8 @@ class UIComponents:
         self.status_bar = self.statusBar()
         self.status_bar.setStyleSheet("""
             QStatusBar {
-                background-color: #f0f0f0;
-                border-top: 1px solid #d0d0d0;
+                background-color: #333333;
+                border-top: 1px solid #1f1f1f;
                 padding: 4px;
             }
             QStatusBar::item {
@@ -726,9 +1425,19 @@ class UIComponents:
         """)
         
         # 创建状态栏标签
-        self.status_label = QtWidgets.QLabel("准备就绪")
-        self.status_label.setStyleSheet("color: #424242; padding: 0 10px;")
+        self.status_label = QtWidgets.QLabel("Current state: 跟踪 (Left mouse)")
+        self.status_label.setStyleSheet("color: #d8d8d8; padding: 0 10px;")
         self.status_bar.addWidget(self.status_label, 1)  # stretch factor = 1
+
+        self.new_session_btn = QtWidgets.QPushButton("新建Session...")
+        self.new_session_btn.setMinimumHeight(22)
+        self.new_session_btn.clicked.connect(self.start_new_session)
+        self.status_bar.addPermanentWidget(self.new_session_btn)
+
+        self.pref_btn = QtWidgets.QPushButton("首选项")
+        self.pref_btn.setMinimumHeight(22)
+        self.pref_btn.clicked.connect(self.open_preferences)
+        self.status_bar.addPermanentWidget(self.pref_btn)
         
         # 初始时显示空白占位符
         self.axial_viewer = None
@@ -748,38 +1457,40 @@ class UIComponents:
         """创建占位符视图"""
         placeholder_style = """
             QLabel {
-                background-color: #f8f9fa;
-                border: 2px dashed #dee2e6;
+                background-color: #151515;
+                border: 1px dashed #4f4f4f;
                 border-radius: 8px;
-                color: #6c757d;
+                color: #9a9a9a;
                 font-size: 14pt;
                 font-weight: 500;
             }
         """
-        
-        # 左上：Axial
-        axial_placeholder = QtWidgets.QLabel("Axial\n横断面")
-        axial_placeholder.setAlignment(QtCore.Qt.AlignCenter)
-        axial_placeholder.setStyleSheet(placeholder_style)
-        self.grid_layout.addWidget(axial_placeholder, 0, 0)
-        
-        # 右上：Sagittal
-        sagittal_placeholder = QtWidgets.QLabel("Sagittal\n矢状面")
-        sagittal_placeholder.setAlignment(QtCore.Qt.AlignCenter)
-        sagittal_placeholder.setStyleSheet(placeholder_style)
-        self.grid_layout.addWidget(sagittal_placeholder, 0, 1)
-        
-        # 左下：Coronal
+
+        # 左上：3D View
+        view3d_placeholder = QtWidgets.QLabel("3D View\n三维体渲染")
+        view3d_placeholder.setAlignment(QtCore.Qt.AlignCenter)
+        view3d_placeholder.setStyleSheet(
+            "QLabel { background-color: #4a0000; border: 1px solid #5f2b2b; color: #d2d2d2; border-radius: 8px; font-size: 14pt; }"
+        )
+        self.grid_layout.addWidget(view3d_placeholder, 0, 0)
+
+        # 右上：Coronal
         coronal_placeholder = QtWidgets.QLabel("Coronal\n冠状面")
         coronal_placeholder.setAlignment(QtCore.Qt.AlignCenter)
         coronal_placeholder.setStyleSheet(placeholder_style)
-        self.grid_layout.addWidget(coronal_placeholder, 1, 0)
-        
-        # 右下：3D View
-        view3d_placeholder = QtWidgets.QLabel("3D View\n三维视图")
-        view3d_placeholder.setAlignment(QtCore.Qt.AlignCenter)
-        view3d_placeholder.setStyleSheet(placeholder_style)
-        self.grid_layout.addWidget(view3d_placeholder, 1, 1)
+        self.grid_layout.addWidget(coronal_placeholder, 0, 1)
+
+        # 左下：Axial
+        axial_placeholder = QtWidgets.QLabel("Axial\n轴位面")
+        axial_placeholder.setAlignment(QtCore.Qt.AlignCenter)
+        axial_placeholder.setStyleSheet(placeholder_style)
+        self.grid_layout.addWidget(axial_placeholder, 1, 0)
+
+        # 右下：Sagittal
+        sagittal_placeholder = QtWidgets.QLabel("Sagittal\n矢状面")
+        sagittal_placeholder.setAlignment(QtCore.Qt.AlignCenter)
+        sagittal_placeholder.setStyleSheet(placeholder_style)
+        self.grid_layout.addWidget(sagittal_placeholder, 1, 1)
     
     def on_export_roi(self):
         """处理ROI导出"""
@@ -815,8 +1526,8 @@ class UIComponents:
             # 如果传入 None，清除直方图并返回
             if data_array is None:
                 self.histogram_ax.clear()
-                self.histogram_ax.set_facecolor('white')
-                self.histogram_figure.patch.set_facecolor('#f5f5f5')
+                self.histogram_ax.set_facecolor('#1f1f1f')
+                self.histogram_figure.patch.set_facecolor('#2f2f2f')
                 self.histogram_canvas.draw_idle()
                 return
 
@@ -864,8 +1575,8 @@ class UIComponents:
                                  edgecolor='none')
             
             # 设置浅色背景
-            self.histogram_ax.set_facecolor('white')
-            self.histogram_figure.patch.set_facecolor('#f5f5f5')
+            self.histogram_ax.set_facecolor('#1f1f1f')
+            self.histogram_figure.patch.set_facecolor('#2f2f2f')
             
             # 隐藏所有坐标轴和刻度
             self.histogram_ax.set_xticks([])
@@ -1183,6 +1894,25 @@ class UIComponents:
             
             # 设置raw_array
             self.raw_array = self.array
+
+            # 更新属性面板
+            if hasattr(self, 'prop_size_label'):
+                self.prop_size_label.setText(f"{self.depth_x} x {self.depth_y} x {self.depth_z}")
+            if hasattr(self, 'prop_spacing_label'):
+                sx, sy, sz = self.spacing if self.spacing is not None else (1.0, 1.0, 1.0)
+                self.prop_spacing_label.setText(f"{sx:.4f} x {sy:.4f} x {sz:.4f}")
+                if hasattr(self, 'prop_spacing_xyz_label'):
+                    self.prop_spacing_xyz_label.setText(f"{sx:.4f} x {sy:.4f} x {sz:.4f}")
+            if hasattr(self, 'prop_type_label'):
+                self.prop_type_label.setText(str(self.array.dtype))
+            if hasattr(self, 'prop_width_label'):
+                self.prop_width_label.setText(str(self.depth_x))
+            if hasattr(self, 'prop_height_label'):
+                self.prop_height_label.setText(str(self.depth_y))
+            if hasattr(self, 'prop_slice_count_label'):
+                self.prop_slice_count_label.setText(str(self.depth_z))
+            if hasattr(self, 'prop_format_label'):
+                self.prop_format_label.setText("Volume")
             
             # 重新创建视图
             data_max = float(self.array.max())
@@ -1234,23 +1964,25 @@ class UIComponents:
             if data_max > 0:
                 # 创建三维体渲染视图
                 self.volume_viewer = VolumeViewer(self.array, self.spacing, simplified=True, downsample_factor=1)
+                if hasattr(self.volume_viewer, 'set_background_color'):
+                    self.volume_viewer.set_background_color((0.45, 0.08, 0.08))
                 
                 # 四宫格布局
-                self.grid_layout.addWidget(self.axial_viewer, 0, 0)
-                self.grid_layout.addWidget(self.sag_viewer, 0, 1)
-                self.grid_layout.addWidget(self.cor_viewer, 1, 0)
-                self.grid_layout.addWidget(self.volume_viewer, 1, 1)
+                self.grid_layout.addWidget(self.volume_viewer, 0, 0)
+                self.grid_layout.addWidget(self.cor_viewer, 0, 1)
+                self.grid_layout.addWidget(self.axial_viewer, 1, 0)
+                self.grid_layout.addWidget(self.sag_viewer, 1, 1)
             else:
                 # 数据全为0，只显示2D视图
-                self.grid_layout.addWidget(self.axial_viewer, 0, 0)
-                self.grid_layout.addWidget(self.sag_viewer, 0, 1)
-                self.grid_layout.addWidget(self.cor_viewer, 1, 0)
+                self.grid_layout.addWidget(self.cor_viewer, 0, 1)
+                self.grid_layout.addWidget(self.axial_viewer, 1, 0)
+                self.grid_layout.addWidget(self.sag_viewer, 1, 1)
                 
-                # 在右下角显示提示信息
+                # 在左上角显示提示信息
                 info_label = QtWidgets.QLabel("3D视图不可用\n(数据全为0)")
                 info_label.setAlignment(QtCore.Qt.AlignCenter)
-                info_label.setStyleSheet("QLabel { background-color: #f0f0f0; color: #666; font-size: 14pt; }")
-                self.grid_layout.addWidget(info_label, 1, 1)
+                info_label.setStyleSheet("QLabel { background-color: #4a0000; color: #d0d0d0; font-size: 14pt; }")
+                self.grid_layout.addWidget(info_label, 0, 0)
             
             # 更新窗口标题
             self.setWindowTitle(f"CT Viewer - {data_name}")
@@ -1269,10 +2001,16 @@ class UIComponents:
                     self.ww_slider.setValue(self.window_width)
                     self.wl_slider.setValue(self.window_level)
                     self.update_all_views()
+
+            if hasattr(self, 'prop_window_label'):
+                self.prop_window_label.setText(f"W: {int(self.window_width)}, L: {int(self.window_level)}")
             
             # 更新灰度直方图
             if hasattr(self, 'update_histogram'):
                 self.update_histogram(self.array)
+
+            if hasattr(self, '_refresh_preview_thumbnail'):
+                self._refresh_preview_thumbnail()
             
             print(f"成功切换到数据: {data_name}")
             
@@ -1385,5 +2123,215 @@ class UIComponents:
         if hasattr(self, 'status_label'):
             self.status_label.setText("")
 
+        if hasattr(self, 'preview_thumb_label'):
+            self.preview_thumb_label.setPixmap(QtGui.QPixmap())
+            self.preview_thumb_label.setText("预览")
+        if hasattr(self, 'prop_size_label'):
+            self.prop_size_label.setText("- x - x -")
+        if hasattr(self, 'prop_spacing_label'):
+            self.prop_spacing_label.setText("- x - x -")
+        if hasattr(self, 'prop_type_label'):
+            self.prop_type_label.setText("-")
+        if hasattr(self, 'prop_window_label'):
+            self.prop_window_label.setText("W: -, L: -")
+
         print("所有数据已移除，状态已重置")
+
+    # ---------------------- 主界面动作方法（新增） ----------------------
+    def start_new_session(self):
+        self.clear_all_data()
+        self.statusBar().showMessage("已创建新会话", 3000)
+
+    def open_preferences(self):
+        QtWidgets.QMessageBox.information(self, "首选项", "首选项面板将用于配置快捷键、主题与默认路径。")
+
+    def save_current_session(self):
+        QtWidgets.QMessageBox.information(self, "保存会话", "当前版本已保留界面入口，后续可扩展会话序列化。")
+
+    def import_dicom_series(self):
+        self.import_file()
+
+    def export_dicom_series(self):
+        QtWidgets.QMessageBox.information(self, "导出DICOM", "当前版本未实现DICOM导出算法，已预留接口。")
+
+    def open_python_console(self):
+        QtWidgets.QMessageBox.information(self, "Python脚本", "已预留Python脚本控制台入口。")
+
+    def toggle_macro_recording(self):
+        self._macro_recording = not getattr(self, '_macro_recording', False)
+        state = "开始" if self._macro_recording else "停止"
+        self.statusBar().showMessage(f"宏录制已{state}", 3000)
+
+    def open_debug_interface(self):
+        QtWidgets.QMessageBox.information(self, "调试接口", "调试接口入口已启用。")
+
+    def open_help_docs(self):
+        QtWidgets.QMessageBox.information(self, "文档", "文档入口已启用。")
+
+    def show_version_info(self):
+        QtWidgets.QMessageBox.information(self, "版本信息", "CT Viewer Pro\nVersion 2.0")
+
+    def contact_support(self):
+        QtWidgets.QMessageBox.information(self, "技术支持", "请联系 support@ctviewer.local")
+
+    def set_pan_mode(self):
+        self.statusBar().showMessage("当前模式：平移", 2000)
+
+    def set_zoom_mode(self):
+        self.statusBar().showMessage("当前模式：缩放", 2000)
+
+    def set_rotate_mode(self):
+        self.statusBar().showMessage("当前模式：旋转", 2000)
+
+    def flip_current_view(self):
+        self.statusBar().showMessage("翻转视图功能入口已启用", 2000)
+
+    def reset_view_transform(self):
+        self.update_all_views()
+        self.statusBar().showMessage("视图变换已重置", 2000)
+
+    def enable_crosshair_mode(self):
+        self.statusBar().showMessage("十字线定位模式已启用", 2000)
+
+    def goto_prev_slice(self):
+        for viewer_name in ["axial_viewer", "cor_viewer", "sag_viewer"]:
+            viewer = getattr(self, viewer_name, None)
+            if viewer:
+                viewer.slider.setValue(max(0, viewer.slider.value() - 1))
+
+    def goto_next_slice(self):
+        for viewer_name in ["axial_viewer", "cor_viewer", "sag_viewer"]:
+            viewer = getattr(self, viewer_name, None)
+            if viewer:
+                viewer.slider.setValue(min(viewer.max_index - 1, viewer.slider.value() + 1))
+
+    def start_brush_annotation(self):
+        self.statusBar().showMessage("画笔标注模式入口已启用", 2000)
+
+    def start_eraser_annotation(self):
+        self.statusBar().showMessage("橡皮擦标注模式入口已启用", 2000)
+
+    def measure_area_placeholder(self):
+        QtWidgets.QMessageBox.information(self, "面积测量", "面积测量入口已预留。")
+
+    def measure_volume_placeholder(self):
+        QtWidgets.QMessageBox.information(self, "体积测量", "体积测量入口已预留。")
+
+    def add_text_annotation(self):
+        QtWidgets.QMessageBox.information(self, "文本注释", "文本注释入口已预留。")
+
+    def on_render_mode_changed(self, mode):
+        if mode == "MIP":
+            self.create_mip_projection(axis=0, use_roi=True)
+        elif mode == "MinIP":
+            self.create_minip_projection(axis=0, use_roi=True)
+
+    def change_background_color(self):
+        color = QtWidgets.QColorDialog.getColor(parent=self)
+        if not color.isValid():
+            return
+        if self.volume_viewer and hasattr(self.volume_viewer, 'set_background_color'):
+            self.volume_viewer.set_background_color((color.redF(), color.greenF(), color.blueF()))
+
+    def export_screenshot(self):
+        pix = self.grab()
+        filepath, _ = QtWidgets.QFileDialog.getSaveFileName(self, "导出截屏", "", "PNG Files (*.png)")
+        if filepath:
+            pix.save(filepath)
+
+    def switch_2d_view(self, view_name):
+        self.statusBar().showMessage(f"2D视图切换：{view_name}", 2000)
+
+    def configure_visible_plane(self):
+        self.statusBar().showMessage("可视平面设置入口已启用", 2000)
+
+    def postprocess_smooth(self):
+        self.statusBar().showMessage("分割后处理：平滑", 2000)
+
+    def postprocess_fill(self):
+        self.statusBar().showMessage("分割后处理：填充", 2000)
+
+    def postprocess_crop(self):
+        self.statusBar().showMessage("分割后处理：裁剪", 2000)
+
+    def postprocess_boolean(self):
+        self.statusBar().showMessage("分割后处理：布尔运算", 2000)
+
+    def save_segmentation_result(self):
+        QtWidgets.QMessageBox.information(self, "保存分割", "分割结果保存入口已启用。")
+
+    def load_segmentation_result(self):
+        QtWidgets.QMessageBox.information(self, "加载分割", "分割结果加载入口已启用。")
+
+    def export_segmentation_model(self):
+        QtWidgets.QMessageBox.information(self, "导出模型", "模型导出入口已启用。")
+
+    def create_new_layer(self):
+        QtWidgets.QMessageBox.information(self, "新建图层", "新建图层入口已启用。")
+
+    def copy_current_layer(self):
+        QtWidgets.QMessageBox.information(self, "复制图层", "复制当前图层入口已启用。")
+
+    def export_current_layer(self):
+        QtWidgets.QMessageBox.information(self, "导出图层", "导出当前图层入口已启用。")
+
+    def apply_3d_preset(self, preset_name):
+        self.statusBar().showMessage(f"应用3D预设：{preset_name}", 2000)
+
+    def preview_crop_effect(self):
+        self.statusBar().showMessage("裁剪预览入口已启用", 2000)
+
+    def _refresh_preview_thumbnail(self):
+        if not hasattr(self, 'preview_thumb_label'):
+            return
+        if self.axial_viewer is None:
+            self.preview_thumb_label.setText("预览")
+            self.preview_thumb_label.setPixmap(QtGui.QPixmap())
+            return
+
+        pixmap = self.axial_viewer.pixmap_item.pixmap()
+        if pixmap is None or pixmap.isNull():
+            self.preview_thumb_label.setText("预览")
+            return
+
+        thumb = pixmap.scaled(
+            self.preview_thumb_label.width() - 6,
+            self.preview_thumb_label.height() - 6,
+            QtCore.Qt.KeepAspectRatio,
+            QtCore.Qt.SmoothTransformation
+        )
+        self.preview_thumb_label.setPixmap(thumb)
+        self.preview_thumb_label.setText("")
+
+    # ---------------------- 四视图十字线联动 ----------------------
+    def sync_crosshair_from_view(self, source_view, x, y, slice_idx):
+        if self.array is None:
+            return
+
+        z_dim, y_dim, x_dim = self.array.shape
+
+        if source_view == "axial":
+            x_idx = int(np.clip(x, 0, x_dim - 1))
+            y_idx = int(np.clip(y, 0, y_dim - 1))
+            z_idx = int(np.clip(slice_idx, 0, z_dim - 1))
+        elif source_view == "coronal":
+            x_idx = int(np.clip(x, 0, x_dim - 1))
+            y_idx = int(np.clip(slice_idx, 0, y_dim - 1))
+            z_idx = int(np.clip(y, 0, z_dim - 1))
+        elif source_view == "sagittal":
+            x_idx = int(np.clip(slice_idx, 0, x_dim - 1))
+            y_idx = int(np.clip(x, 0, y_dim - 1))
+            z_idx = int(np.clip(y, 0, z_dim - 1))
+        else:
+            return
+
+        if self.axial_viewer:
+            self.axial_viewer.slider.setValue(z_idx)
+            self.axial_viewer.set_crosshair(x_idx, y_idx)
+        if self.cor_viewer:
+            self.cor_viewer.slider.setValue(y_idx)
+            self.cor_viewer.set_crosshair(x_idx, z_idx)
+        if self.sag_viewer:
+            self.sag_viewer.slider.setValue(x_idx)
+            self.sag_viewer.set_crosshair(y_idx, z_idx)
 

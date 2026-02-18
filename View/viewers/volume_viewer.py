@@ -298,3 +298,14 @@ class VolumeViewer(QtWidgets.QFrame):
         if hasattr(self, 'renderer') and self.renderer:
             self.renderer.GetRenderWindow().Render()
 
+    def set_background_color(self, rgb):
+        """设置3D渲染背景颜色"""
+        if not hasattr(self, 'renderer') or self.renderer is None:
+            return
+        try:
+            r, g, b = rgb
+            self.renderer.SetBackground(float(r), float(g), float(b))
+            self.renderer.GetRenderWindow().Render()
+        except Exception:
+            pass
+

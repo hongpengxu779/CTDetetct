@@ -63,6 +63,14 @@ class SliceViewer(QtWidgets.QWidget):
         self.parent_controller = None
         self.is_roi_dragging = False
         self.active_roi = -1
+
+        # 交互状态
+        self.crosshair_x = None
+        self.crosshair_y = None
+        self.crosshair_items = []
+        self.is_panning = False
+        self.is_zooming = False
+        self.last_mouse_pos = None
         
         # 确定视图类型
         if "Axial" in title:
@@ -79,6 +87,11 @@ class SliceViewer(QtWidgets.QWidget):
 
         # 主布局
         main_layout = QtWidgets.QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # 专业模式：隐藏标题与滑条，使用覆盖层信息显示
+        self.professional_ui = True
         
         # 顶部标题栏布局
         title_layout = QtWidgets.QHBoxLayout()
@@ -87,6 +100,7 @@ class SliceViewer(QtWidgets.QWidget):
         title_label = QtWidgets.QLabel(title)
         title_label.setStyleSheet("font-weight: bold;")
         title_layout.addWidget(title_label)
+        self.title_label = title_label
         
         title_layout.addStretch()
         
@@ -99,7 +113,7 @@ class SliceViewer(QtWidgets.QWidget):
         self.view.setRenderHint(QtGui.QPainter.SmoothPixmapTransform)
         self.view.setAlignment(QtCore.Qt.AlignCenter)
         self.view.setMinimumHeight(300)  # 设置最小高度
-        self.view.setStyleSheet("border: 1px solid #cccccc; background-color: #f0f0f0;")
+        self.view.setStyleSheet("border: 1px solid #2f2f2f; background-color: #000000;")
         
         # 图像项
         self.pixmap_item = QtWidgets.QGraphicsPixmapItem()
@@ -112,18 +126,19 @@ class SliceViewer(QtWidgets.QWidget):
         self.zoom_btn.clicked.connect(self.open_zoom_window)
         self.zoom_btn.setStyleSheet("""
             QPushButton {
-                background-color: rgba(255, 255, 255, 200);
-                border: 1px solid #aaaaaa;
+                background-color: rgba(40, 40, 40, 210);
+                color: #f0f0f0;
+                border: 1px solid #686868;
                 border-radius: 4px;
                 font-size: 16px;
                 padding: 0px;
             }
             QPushButton:hover {
-                background-color: rgba(230, 230, 230, 220);
-                border: 1px solid #888888;
+                background-color: rgba(70, 70, 70, 230);
+                border: 1px solid #8a8a8a;
             }
             QPushButton:pressed {
-                background-color: rgba(200, 200, 200, 220);
+                background-color: rgba(90, 90, 90, 230);
             }
         """)
         self.zoom_btn.setCursor(QtCore.Qt.PointingHandCursor)
@@ -138,11 +153,29 @@ class SliceViewer(QtWidgets.QWidget):
         self.slider.setRange(0, max_index - 1)  # 设置滑动条范围
         self.slider.valueChanged.connect(self.update_slice)  # 当值改变时触发 update_slice
         main_layout.addWidget(self.slider)
+
+        # 覆盖信息标签（显示当前视图和切片）
+        self.overlay_label = QtWidgets.QLabel(self.view.viewport())
+        self.overlay_label.setStyleSheet(
+            "QLabel {"
+            "background-color: rgba(0, 0, 0, 130);"
+            "color: #e8e8e8;"
+            "border-radius: 3px;"
+            "padding: 4px 6px;"
+            "font-size: 9pt;"
+            "}"
+        )
+        self.overlay_label.move(8, 8)
+        self.overlay_label.raise_()
         
         self.setLayout(main_layout)
 
         # 默认显示中间切片
         self.slider.setValue(max_index // 2)
+
+        if self.professional_ui:
+            self.title_label.hide()
+            self.slider.hide()
         
         # 初始化放大按钮位置
         QtCore.QTimer.singleShot(0, self._update_zoom_button_position)
@@ -158,6 +191,70 @@ class SliceViewer(QtWidgets.QWidget):
         if hasattr(self, 'zoom_btn') and hasattr(self, 'view'):
             view_width = self.view.width()
             self.zoom_btn.move(view_width - self.zoom_btn.width() - 8, 8)
+
+    def _update_overlay_text(self, idx):
+        """更新视图覆盖层文本"""
+        extra = ""
+        if self.parent_viewer is not None:
+            w = getattr(self.parent_viewer, 'window_width', None)
+            c = getattr(self.parent_viewer, 'window_level', None)
+            if w is not None and c is not None:
+                extra = f"\nW:{int(w)} C:{int(c)}"
+        self.overlay_label.setText(f"{self.title}{extra}\nSlice {idx + 1}/{self.max_index}")
+        self.overlay_label.adjustSize()
+
+    def set_crosshair(self, x, y):
+        """设置当前视图十字线坐标"""
+        self.crosshair_x = int(x)
+        self.crosshair_y = int(y)
+        self._redraw_crosshair()
+
+    def _clear_crosshair_items(self):
+        for item in self.crosshair_items:
+            try:
+                self.scene.removeItem(item)
+            except Exception:
+                pass
+        self.crosshair_items = []
+
+    def _redraw_crosshair(self):
+        self._clear_crosshair_items()
+        if self.crosshair_x is None or self.crosshair_y is None:
+            return
+
+        if self.parent_viewer is not None and hasattr(self.parent_viewer, 'chk_show_crosshair'):
+            if not self.parent_viewer.chk_show_crosshair.isChecked():
+                return
+
+        rect = self.scene.sceneRect()
+        if rect.isEmpty():
+            return
+
+        if self.view_type == "coronal":
+            pen_h = QtGui.QPen(QtGui.QColor(130, 255, 130), 1)
+            pen_v = QtGui.QPen(QtGui.QColor(120, 180, 255), 1)
+        elif self.view_type == "axial":
+            pen_h = QtGui.QPen(QtGui.QColor(255, 110, 110), 1)
+            pen_v = QtGui.QPen(QtGui.QColor(120, 180, 255), 1)
+        else:  # sagittal
+            pen_h = QtGui.QPen(QtGui.QColor(130, 255, 130), 1)
+            pen_v = QtGui.QPen(QtGui.QColor(255, 150, 150), 1)
+
+        h_line = self.scene.addLine(rect.left(), self.crosshair_y, rect.right(), self.crosshair_y, pen_h)
+        v_line = self.scene.addLine(self.crosshair_x, rect.top(), self.crosshair_x, rect.bottom(), pen_v)
+        self.crosshair_items = [h_line, v_line]
+
+    def _update_crosshair_from_mouse_event(self, event):
+        scene_pos = self.view.mapToScene(event.pos())
+        pixmap = self.pixmap_item.pixmap()
+        if pixmap is None or pixmap.isNull():
+            return
+        x = int(scene_pos.x())
+        y = int(scene_pos.y())
+        if 0 <= x < pixmap.width() and 0 <= y < pixmap.height():
+            self.set_crosshair(x, y)
+            if self.parent_viewer and hasattr(self.parent_viewer, 'sync_crosshair_from_view'):
+                self.parent_viewer.sync_crosshair_from_view(self.view_type, x, y, self.slider.value())
     
     def open_zoom_window(self):
         """打开缩放窗口（简化版，无窗宽窗位控制）"""
@@ -213,6 +310,13 @@ class SliceViewer(QtWidgets.QWidget):
         
         # 更新视图以适应场景
         self.view.fitInView(self.scene.sceneRect(), QtCore.Qt.KeepAspectRatio)
+
+        # 更新覆盖层
+        if hasattr(self, 'overlay_label'):
+            self._update_overlay_text(idx)
+
+        # 重绘十字线
+        self._redraw_crosshair()
         
         # 如果缩放窗口打开着，更新它的图像
         if hasattr(self, 'zoom_window') and self.zoom_window and self.zoom_window.isVisible():
@@ -225,6 +329,11 @@ class SliceViewer(QtWidgets.QWidget):
         
         # 更新放大按钮的位置到视图内部右上角
         self._update_zoom_button_position()
+
+        if hasattr(self, 'overlay_label'):
+            self.overlay_label.move(8, 8)
+
+        self._redraw_crosshair()
         
         # 获取当前场景矩形
         scene_rect = self.scene.sceneRect()
@@ -302,6 +411,61 @@ class SliceViewer(QtWidgets.QWidget):
     def eventFilter(self, obj, event):
         """事件过滤器，处理鼠标事件"""
         if obj == self.view.viewport():
+            if event.type() == QtCore.QEvent.Wheel:
+                delta = event.angleDelta().y()
+                step = 1 if delta > 0 else -1
+                new_value = max(0, min(self.max_index - 1, self.slider.value() + step))
+                self.slider.setValue(new_value)
+                return True
+
+            # 中键缩放
+            if self.measurement_mode is None and self.roi_mode is None:
+                if event.type() == QtCore.QEvent.MouseButtonPress and event.button() == QtCore.Qt.MiddleButton:
+                    self.is_zooming = True
+                    self.last_mouse_pos = event.pos()
+                    self.view.viewport().setCursor(QtCore.Qt.SizeVerCursor)
+                    return True
+                if event.type() == QtCore.QEvent.MouseMove and self.is_zooming and self.last_mouse_pos is not None:
+                    delta_y = event.pos().y() - self.last_mouse_pos.y()
+                    scale = 1.0 + (-delta_y * 0.005)
+                    scale = max(0.9, min(1.1, scale))
+                    self.view.scale(scale, scale)
+                    self.last_mouse_pos = event.pos()
+                    return True
+                if event.type() == QtCore.QEvent.MouseButtonRelease and event.button() == QtCore.Qt.MiddleButton:
+                    self.is_zooming = False
+                    self.last_mouse_pos = None
+                    self.view.viewport().setCursor(QtCore.Qt.ArrowCursor)
+                    return True
+
+                # 右键平移
+                if event.type() == QtCore.QEvent.MouseButtonPress and event.button() == QtCore.Qt.RightButton:
+                    self.is_panning = True
+                    self.last_mouse_pos = event.pos()
+                    self.view.viewport().setCursor(QtCore.Qt.ClosedHandCursor)
+                    return True
+                if event.type() == QtCore.QEvent.MouseMove and self.is_panning and self.last_mouse_pos is not None:
+                    delta = event.pos() - self.last_mouse_pos
+                    h_bar = self.view.horizontalScrollBar()
+                    v_bar = self.view.verticalScrollBar()
+                    h_bar.setValue(h_bar.value() - delta.x())
+                    v_bar.setValue(v_bar.value() - delta.y())
+                    self.last_mouse_pos = event.pos()
+                    return True
+                if event.type() == QtCore.QEvent.MouseButtonRelease and event.button() == QtCore.Qt.RightButton:
+                    self.is_panning = False
+                    self.last_mouse_pos = None
+                    self.view.viewport().setCursor(QtCore.Qt.ArrowCursor)
+                    return True
+
+                # 左键移动十字线并联动
+                if event.type() == QtCore.QEvent.MouseButtonPress and event.button() == QtCore.Qt.LeftButton:
+                    self._update_crosshair_from_mouse_event(event)
+                    # 继续传递，避免影响已有功能
+
+                if event.type() == QtCore.QEvent.MouseMove and (event.buttons() & QtCore.Qt.LeftButton):
+                    self._update_crosshair_from_mouse_event(event)
+
             if self.roi_mode == 'selection':
                 # ... existing code ...
                 if event.type() == QtCore.QEvent.MouseButtonPress:

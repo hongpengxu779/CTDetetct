@@ -64,6 +64,9 @@ class CTViewer4(QtWidgets.QMainWindow, UIComponents, WindowLevelControl,
         
         # 创建菜单栏
         self.create_menu()
+
+        # 创建顶部工具条（界面复刻，不改变算法）
+        self.create_top_toolbars()
         
         # 初始化界面布局
         self.init_ui()
