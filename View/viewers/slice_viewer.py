@@ -158,14 +158,14 @@ class SliceViewer(QtWidgets.QWidget):
         self.overlay_label = QtWidgets.QLabel(self.view.viewport())
         self.overlay_label.setStyleSheet(
             "QLabel {"
-            "background-color: rgba(0, 0, 0, 130);"
+            "background-color: rgba(0, 0, 0, 110);"
             "color: #e8e8e8;"
-            "border-radius: 3px;"
-            "padding: 4px 6px;"
-            "font-size: 9pt;"
+            "border-radius: 2px;"
+            "padding: 2px 4px;"
+            "font-size: 8pt;"
             "}"
         )
-        self.overlay_label.move(8, 8)
+        self.overlay_label.move(6, 6)
         self.overlay_label.raise_()
         
         self.setLayout(main_layout)
@@ -331,7 +331,7 @@ class SliceViewer(QtWidgets.QWidget):
         self._update_zoom_button_position()
 
         if hasattr(self, 'overlay_label'):
-            self.overlay_label.move(8, 8)
+            self.overlay_label.move(6, 6)
 
         self._redraw_crosshair()
         

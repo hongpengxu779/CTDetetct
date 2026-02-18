@@ -29,25 +29,28 @@ class UIComponents:
         stylesheet = """
         QMainWindow {
             background-color: #2a2a2a;
+            font-size: 9pt;
         }
         
         QWidget {
             background-color: #2a2a2a;
             color: #d8d8d8;
+            font-size: 9pt;
         }
         
         QMenuBar {
             background-color: #383838;
             border-bottom: 1px solid #1e1e1e;
-            padding: 2px 4px;
-            min-height: 28px;
+            padding: 1px 4px;
+            min-height: 24px;
             spacing: 3px;
             color: #e6e6e6;
+            font-size: 9pt;
         }
         
         QMenuBar::item {
             background-color: transparent;
-            padding: 6px 12px;
+            padding: 4px 10px;
             border-radius: 4px;
             margin: 0px;
         }
@@ -68,7 +71,7 @@ class UIComponents:
         }
         
         QMenu::item {
-            padding: 6px 25px;
+            padding: 5px 20px;
         }
         
         QMenu::item:selected {
@@ -80,6 +83,7 @@ class UIComponents:
             border-bottom: 1px solid #222;
             spacing: 2px;
             padding: 2px;
+            min-height: 26px;
         }
 
         QToolButton {
@@ -87,8 +91,10 @@ class UIComponents:
             color: #f2f2f2;
             border: 1px solid #5d5d5d;
             border-radius: 3px;
-            padding: 2px 5px;
-            min-height: 20px;
+            padding: 1px 4px;
+            min-height: 18px;
+            min-width: 20px;
+            font-size: 8.5pt;
         }
 
         QToolButton:hover {
@@ -138,16 +144,17 @@ class UIComponents:
             background-color: #323232;
             border: 1px solid #4d4d4d;
             border-radius: 6px;
-            margin-top: 10px;
-            padding-top: 10px;
+            margin-top: 7px;
+            padding-top: 7px;
             font-weight: bold;
             color: #e8e8e8;
+            font-size: 8.8pt;
         }
         
         QGroupBox::title {
             subcontrol-origin: margin;
             subcontrol-position: top left;
-            padding: 4px 8px;
+            padding: 2px 6px;
             background-color: #323232;
             border-radius: 3px;
         }
@@ -157,8 +164,10 @@ class UIComponents:
             color: #f1f1f1;
             border: 1px solid #666;
             border-radius: 4px;
-            padding: 6px 16px;
+            padding: 3px 8px;
             font-weight: 500;
+            min-height: 20px;
+            font-size: 8.8pt;
         }
         
         QPushButton:hover {
@@ -178,7 +187,7 @@ class UIComponents:
         
         QSlider::groove:horizontal {
             border: 1px solid #555;
-            height: 6px;
+            height: 5px;
             background: #2d2d2d;
             border-radius: 3px;
         }
@@ -187,8 +196,8 @@ class UIComponents:
             background: #909090;
             border: 1px solid #b0b0b0;
             width: 16px;
-            height: 16px;
-            margin: -6px 0;
+            height: 14px;
+            margin: -5px 0;
             border-radius: 8px;
         }
         
@@ -198,6 +207,7 @@ class UIComponents:
         
         QLabel {
             color: #d8d8d8;
+            font-size: 8.8pt;
         }
         
         QLineEdit {
@@ -216,8 +226,9 @@ class UIComponents:
             background-color: #2c2c2c;
             border: 1px solid #666;
             border-radius: 4px;
-            padding: 4px;
+            padding: 2px;
             color: #f0f0f0;
+            min-height: 20px;
         }
         
         QSpinBox:focus, QDoubleSpinBox:focus {
@@ -237,6 +248,7 @@ class UIComponents:
             background-color: #333;
             color: #d6d6d6;
             border-top: 1px solid #1d1d1d;
+            font-size: 8.8pt;
         }
         
         QRadioButton {
@@ -266,97 +278,117 @@ class UIComponents:
         # 第一排：基础文件操作
         primary_toolbar = QtWidgets.QToolBar("主工具栏", self)
         primary_toolbar.setMovable(False)
-        primary_toolbar.setIconSize(QtCore.QSize(14, 14))
+        primary_toolbar.setIconSize(QtCore.QSize(16, 16))
+        primary_toolbar.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
         self.addToolBar(QtCore.Qt.TopToolBarArea, primary_toolbar)
 
         open_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DialogOpenButton), "打开", self)
+        open_action.setToolTip("打开")
         open_action.triggered.connect(self.import_file)
         primary_toolbar.addAction(open_action)
 
         save_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DialogSaveButton), "保存", self)
+        save_action.setToolTip("保存")
         save_action.triggered.connect(self.save_current_session)
         primary_toolbar.addAction(save_action)
 
         import_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DirOpenIcon), "导入", self)
+        import_action.setToolTip("导入")
         import_action.triggered.connect(self.import_file)
         primary_toolbar.addAction(import_action)
 
         export_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DialogSaveButton), "导出", self)
+        export_action.setToolTip("导出")
         export_action.triggered.connect(self.export_current_layer)
         primary_toolbar.addAction(export_action)
 
         reset_view_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_BrowserReload), "重置窗宽窗位", self)
+        reset_view_action.setToolTip("重置窗宽窗位")
         reset_view_action.triggered.connect(self.reset_window_level)
         primary_toolbar.addAction(reset_view_action)
 
         primary_toolbar.addSeparator()
 
         roi_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DirIcon), "ROI", self)
+        roi_action.setToolTip("ROI")
         roi_action.triggered.connect(self.roi_selection_start)
         primary_toolbar.addAction(roi_action)
 
         roi_clear_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_TrashIcon), "清除ROI", self)
+        roi_clear_action.setToolTip("清除ROI")
         roi_clear_action.triggered.connect(self.roi_selection_clear)
         primary_toolbar.addAction(roi_clear_action)
 
         primary_toolbar.addSeparator()
 
         segment_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowForward), "U-Net分割", self)
+        segment_action.setToolTip("U-Net分割")
         segment_action.triggered.connect(self.run_unet_segmentation)
         primary_toolbar.addAction(segment_action)
 
         # 第二排：视图/测量快捷
         secondary_toolbar = QtWidgets.QToolBar("显示工具栏", self)
         secondary_toolbar.setMovable(False)
-        secondary_toolbar.setIconSize(QtCore.QSize(14, 14))
+        secondary_toolbar.setIconSize(QtCore.QSize(16, 16))
+        secondary_toolbar.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
         self.addToolBarBreak(QtCore.Qt.TopToolBarArea)
         self.addToolBar(QtCore.Qt.TopToolBarArea, secondary_toolbar)
 
         pan_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowLeft), "平移", self)
+        pan_action.setToolTip("平移")
         pan_action.triggered.connect(self.set_pan_mode)
         secondary_toolbar.addAction(pan_action)
 
         zoom_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowUp), "缩放", self)
+        zoom_action.setToolTip("缩放")
         zoom_action.triggered.connect(self.set_zoom_mode)
         secondary_toolbar.addAction(zoom_action)
 
         rotate_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_BrowserReload), "旋转", self)
+        rotate_action.setToolTip("旋转")
         rotate_action.triggered.connect(self.set_rotate_mode)
         secondary_toolbar.addAction(rotate_action)
 
         secondary_toolbar.addSeparator()
 
         distance_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_LineEditClearButton), "距离", self)
+        distance_action.setToolTip("距离测量")
         distance_action.triggered.connect(self.measure_distance)
         secondary_toolbar.addAction(distance_action)
 
         angle_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_FileDialogDetailedView), "角度", self)
+        angle_action.setToolTip("角度测量")
         angle_action.triggered.connect(self.measure_angle)
         secondary_toolbar.addAction(angle_action)
 
         secondary_toolbar.addSeparator()
 
         mip_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ComputerIcon), "MIP(Z)", self)
+        mip_action.setToolTip("MIP")
         mip_action.triggered.connect(lambda: self.create_mip_projection(axis=0, use_roi=True))
         secondary_toolbar.addAction(mip_action)
 
         minip_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_TitleBarShadeButton), "MinIP(Z)", self)
+        minip_action.setToolTip("MinIP")
         minip_action.triggered.connect(lambda: self.create_minip_projection(axis=0, use_roi=True))
         secondary_toolbar.addAction(minip_action)
 
         # 第三排：开关与步进（贴近专业软件）
         tertiary_toolbar = QtWidgets.QToolBar("交互工具栏", self)
         tertiary_toolbar.setMovable(False)
-        tertiary_toolbar.setIconSize(QtCore.QSize(14, 14))
+        tertiary_toolbar.setIconSize(QtCore.QSize(16, 16))
+        tertiary_toolbar.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
         self.addToolBarBreak(QtCore.Qt.TopToolBarArea)
         self.addToolBar(QtCore.Qt.TopToolBarArea, tertiary_toolbar)
 
         link_views_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_CommandLink), "联动", self)
+        link_views_action.setToolTip("视图联动")
         link_views_action.setCheckable(True)
         link_views_action.setChecked(True)
         tertiary_toolbar.addAction(link_views_action)
 
         show_cross_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DialogYesButton), "十字线", self)
+        show_cross_action.setToolTip("十字线")
         show_cross_action.setCheckable(True)
         show_cross_action.setChecked(True)
         show_cross_action.triggered.connect(lambda checked: self.chk_show_crosshair.setChecked(checked) if hasattr(self, 'chk_show_crosshair') else None)
@@ -610,9 +642,15 @@ class UIComponents:
             btn.setText(text)
             btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
             btn.clicked.connect(callback)
-            btn.setMinimumHeight(22)
-            ops_layout.addWidget(btn, idx // 2, idx % 2)
+            btn.setMinimumHeight(20)
+            btn.setMinimumWidth(44)
+            ops_layout.addWidget(btn, idx // 4, idx % 4)
         main_console_layout.addWidget(ops_group)
+
+        sep1 = QtWidgets.QFrame()
+        sep1.setFrameShape(QtWidgets.QFrame.HLine)
+        sep1.setStyleSheet("color:#4a4a4a;")
+        main_console_layout.addWidget(sep1)
         
         # 窗位/窗宽
         ww_wl_group = QtWidgets.QGroupBox("窗宽窗位")
@@ -685,9 +723,15 @@ class UIComponents:
             btn.setText(text)
             btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
             btn.clicked.connect(callback)
-            btn.setMinimumHeight(22)
-            annotation_layout.addWidget(btn, idx // 2, idx % 2)
+            btn.setMinimumHeight(20)
+            btn.setMinimumWidth(44)
+            annotation_layout.addWidget(btn, idx // 4, idx % 4)
         main_console_layout.addWidget(annotation_group)
+
+        sep2 = QtWidgets.QFrame()
+        sep2.setFrameShape(QtWidgets.QFrame.HLine)
+        sep2.setStyleSheet("color:#4a4a4a;")
+        main_console_layout.addWidget(sep2)
 
         # 移动区
         move_group = QtWidgets.QGroupBox("移动区")
@@ -698,6 +742,11 @@ class UIComponents:
         move_layout.addWidget(self.chk_dynamic_refresh)
         move_layout.addWidget(self.chk_interactive_probe)
         main_console_layout.addWidget(move_group)
+
+        sep3 = QtWidgets.QFrame()
+        sep3.setFrameShape(QtWidgets.QFrame.HLine)
+        sep3.setStyleSheet("color:#4a4a4a;")
+        main_console_layout.addWidget(sep3)
 
         # 场景视图属性
         scene_group = QtWidgets.QGroupBox("场景视图属性")
@@ -958,8 +1007,9 @@ class UIComponents:
             btn.setText(text)
             btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
             btn.clicked.connect(callback)
-            btn.setMinimumHeight(22)
-            manual_seg_layout.addWidget(btn, idx // 2, idx % 2)
+            btn.setMinimumHeight(20)
+            btn.setMinimumWidth(44)
+            manual_seg_layout.addWidget(btn, idx // 4, idx % 4)
         segmentation_layout.addWidget(manual_seg_group)
 
         post_seg_group = QtWidgets.QGroupBox("分割后处理")
@@ -976,8 +1026,9 @@ class UIComponents:
             btn.setText(text)
             btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
             btn.clicked.connect(callback)
-            btn.setMinimumHeight(22)
-            post_seg_layout.addWidget(btn, idx // 2, idx % 2)
+            btn.setMinimumHeight(20)
+            btn.setMinimumWidth(44)
+            post_seg_layout.addWidget(btn, idx // 4, idx % 4)
         segmentation_layout.addWidget(post_seg_group)
 
         result_group = QtWidgets.QGroupBox("分割结果管理")
@@ -1041,11 +1092,11 @@ class UIComponents:
         data_list_label.setStyleSheet("""
             QLabel {
                 color: #d9d9d9; 
-                font-size: 10pt; 
+                font-size: 9pt; 
                 font-weight: bold;
                 background-color: transparent;
                 border: none;
-                padding: 4px;
+                padding: 2px;
             }
         """)
         data_list_label.setAlignment(QtCore.Qt.AlignCenter)
@@ -1189,10 +1240,10 @@ class UIComponents:
         histogram_label.setStyleSheet("""
             QLabel {
                 color: #d9d9d9; 
-                font-size: 10pt; 
+                font-size: 9pt; 
                 background-color: transparent;
                 border: none;
-                padding: 4px;
+                padding: 2px;
             }
         """)
         histogram_label.setAlignment(QtCore.Qt.AlignCenter)
@@ -1250,7 +1301,7 @@ class UIComponents:
 
         property_title = QtWidgets.QLabel("数据属性和设定")
         property_title.setAlignment(QtCore.Qt.AlignLeft)
-        property_title.setStyleSheet("QLabel { font-weight: bold; color: #dedede; border: none; }")
+        property_title.setStyleSheet("QLabel { font-weight: bold; font-size: 9pt; color: #dedede; border: none; padding: 1px 2px; }")
         property_layout.addWidget(property_title)
 
         info_form = QtWidgets.QFormLayout()
@@ -1394,6 +1445,7 @@ class UIComponents:
         right_toolbox.addItem(data_list_panel, "数据属性和设定")
         right_toolbox.addItem(property_panel, "属性设置")
         right_toolbox.addItem(histogram_panel, "灰度直方图")
+        right_toolbox.setCurrentIndex(0)
         right_panel_layout.addWidget(right_toolbox, 1)
         
         # 将右侧面板添加到主分割器
