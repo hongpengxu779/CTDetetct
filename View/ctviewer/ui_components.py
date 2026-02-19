@@ -275,7 +275,63 @@ class UIComponents:
         """创建顶部紧凑工具条（单行优先，避免挤压主视图区）"""
         style = self.style()
 
-        # 第一排：基础文件操作
+        # Manipulate 工具组（Track / Pan / Cine / Zoom + Fit / Reset）
+        manipulate_toolbar = QtWidgets.QToolBar("Manipulate", self)
+        manipulate_toolbar.setMovable(False)
+        manipulate_toolbar.setIconSize(QtCore.QSize(16, 16))
+        manipulate_toolbar.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
+        self.addToolBar(QtCore.Qt.TopToolBarArea, manipulate_toolbar)
+
+        self.manipulate_action_group = QtWidgets.QActionGroup(self)
+        self.manipulate_action_group.setExclusive(True)
+
+        self.track_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DialogYesButton), "Track", self)
+        self.track_action.setToolTip("Track（十字线联动）")
+        self.track_action.setCheckable(True)
+        self.track_action.triggered.connect(self.set_track_mode)
+        self.manipulate_action_group.addAction(self.track_action)
+        manipulate_toolbar.addAction(self.track_action)
+
+        self.pan_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowLeft), "Pan", self)
+        self.pan_action.setToolTip("Pan（平移）")
+        self.pan_action.setCheckable(True)
+        self.pan_action.triggered.connect(self.set_pan_mode)
+        self.manipulate_action_group.addAction(self.pan_action)
+        manipulate_toolbar.addAction(self.pan_action)
+
+        self.cine_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_MediaPlay), "Cine", self)
+        self.cine_action.setToolTip("Cine（自动滚片）")
+        self.cine_action.setCheckable(True)
+        self.cine_action.toggled.connect(self.set_cine_mode)
+        self.manipulate_action_group.addAction(self.cine_action)
+        manipulate_toolbar.addAction(self.cine_action)
+
+        self.zoom_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowUp), "Zoom", self)
+        self.zoom_action.setToolTip("Zoom（缩放）")
+        self.zoom_action.setCheckable(True)
+        self.zoom_action.triggered.connect(self.set_zoom_mode)
+        self.manipulate_action_group.addAction(self.zoom_action)
+        manipulate_toolbar.addAction(self.zoom_action)
+
+        manipulate_toolbar.addSeparator()
+
+        self.fit_view_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_TitleBarMaxButton), "Fit", self)
+        self.fit_view_action.setToolTip("Fit to View")
+        self.fit_view_action.triggered.connect(self.fit_all_views)
+        manipulate_toolbar.addAction(self.fit_view_action)
+
+        self.reset_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_BrowserReload), "Reset", self)
+        self.reset_action.setToolTip("Reset")
+        self.reset_action.triggered.connect(self.reset_view_transform)
+        manipulate_toolbar.addAction(self.reset_action)
+
+        self.track_action.setChecked(True)
+
+        self.cine_timer = QtCore.QTimer(self)
+        self.cine_timer.setInterval(90)
+        self.cine_timer.timeout.connect(self._cine_tick)
+
+        # 第一组：基础文件操作
         primary_toolbar = QtWidgets.QToolBar("主工具栏", self)
         primary_toolbar.setMovable(False)
         primary_toolbar.setIconSize(QtCore.QSize(16, 16))
@@ -2227,13 +2283,77 @@ class UIComponents:
         QtWidgets.QMessageBox.information(self, "技术支持", "请联系 support@ctviewer.local")
 
     def set_pan_mode(self):
+        self._sync_manipulate_action('pan')
+        self._stop_cine_if_running()
         self.statusBar().showMessage("当前模式：平移", 2000)
 
     def set_zoom_mode(self):
+        self._sync_manipulate_action('zoom')
+        self._stop_cine_if_running()
         self.statusBar().showMessage("当前模式：缩放", 2000)
 
     def set_rotate_mode(self):
+        self._stop_cine_if_running()
         self.statusBar().showMessage("当前模式：旋转", 2000)
+
+    def set_track_mode(self):
+        self._sync_manipulate_action('track')
+        self._stop_cine_if_running()
+        if hasattr(self, 'chk_show_crosshair'):
+            self.chk_show_crosshair.setChecked(True)
+        self.enable_crosshair_mode()
+
+    def set_cine_mode(self, enabled):
+        if enabled:
+            self._sync_manipulate_action('cine')
+            self.cine_timer.start()
+            self.statusBar().showMessage("当前模式：Cine 自动滚片", 2000)
+            return
+        if hasattr(self, 'cine_timer') and self.cine_timer.isActive():
+            self.cine_timer.stop()
+            self.statusBar().showMessage("Cine 已停止", 1500)
+
+    def _stop_cine_if_running(self):
+        if hasattr(self, 'cine_action') and self.cine_action.isChecked():
+            self.cine_action.setChecked(False)
+
+    def _sync_manipulate_action(self, mode):
+        if not hasattr(self, 'manipulate_action_group'):
+            return
+        action_map = {
+            'track': getattr(self, 'track_action', None),
+            'pan': getattr(self, 'pan_action', None),
+            'cine': getattr(self, 'cine_action', None),
+            'zoom': getattr(self, 'zoom_action', None),
+        }
+        target = action_map.get(mode)
+        if target and not target.isChecked():
+            target.setChecked(True)
+
+    def _cine_tick(self):
+        step = self._get_slice_step()
+        for viewer_name in ["axial_viewer", "cor_viewer", "sag_viewer"]:
+            viewer = getattr(self, viewer_name, None)
+            if viewer is None:
+                continue
+            cur = viewer.slider.value()
+            max_idx = max(0, viewer.max_index - 1)
+            nxt = cur + step
+            if nxt > max_idx:
+                nxt = 0
+            viewer.slider.setValue(nxt)
+
+    def fit_all_views(self):
+        for viewer_name in ["axial_viewer", "cor_viewer", "sag_viewer"]:
+            viewer = getattr(self, viewer_name, None)
+            if viewer:
+                viewer.update_slice(viewer.slider.value())
+        self.statusBar().showMessage("已适配到窗口", 2000)
+
+    def _get_slice_step(self):
+        if hasattr(self, 'slice_step_spin'):
+            return max(1, int(self.slice_step_spin.value()))
+        return 1
 
     def flip_current_view(self):
         self.statusBar().showMessage("翻转视图功能入口已启用", 2000)
@@ -2246,16 +2366,18 @@ class UIComponents:
         self.statusBar().showMessage("十字线定位模式已启用", 2000)
 
     def goto_prev_slice(self):
+        step = self._get_slice_step()
         for viewer_name in ["axial_viewer", "cor_viewer", "sag_viewer"]:
             viewer = getattr(self, viewer_name, None)
             if viewer:
-                viewer.slider.setValue(max(0, viewer.slider.value() - 1))
+                viewer.slider.setValue(max(0, viewer.slider.value() - step))
 
     def goto_next_slice(self):
+        step = self._get_slice_step()
         for viewer_name in ["axial_viewer", "cor_viewer", "sag_viewer"]:
             viewer = getattr(self, viewer_name, None)
             if viewer:
-                viewer.slider.setValue(min(viewer.max_index - 1, viewer.slider.value() + 1))
+                viewer.slider.setValue(min(viewer.max_index - 1, viewer.slider.value() + step))
 
     def start_brush_annotation(self):
         self.statusBar().showMessage("画笔标注模式入口已启用", 2000)
