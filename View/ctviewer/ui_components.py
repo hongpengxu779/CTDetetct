@@ -5,6 +5,7 @@ CT查看器UI组件
 
 from PyQt5 import QtWidgets, QtCore, QtGui
 import numpy as np
+import SimpleITK as sitk
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib
@@ -569,6 +570,76 @@ class UIComponents:
         threshold_action = QtWidgets.QAction("阈值分割", self)
         threshold_action.triggered.connect(self.run_threshold_segmentation)
         traditional_seg_menu.addAction(threshold_action)
+
+        # 通用图像滤波菜单
+        common_filter_menu = tools_menu.addMenu("通用图像滤波")
+
+        cc_menu = common_filter_menu.addMenu("连通域")
+        cc_action = QtWidgets.QAction("连通域标记", self)
+        cc_action.triggered.connect(self.run_connected_component)
+        cc_menu.addAction(cc_action)
+        scc_action = QtWidgets.QAction("灰度连通域", self)
+        scc_action.triggered.connect(self.run_scalar_connected_component)
+        cc_menu.addAction(scc_action)
+        relabel_action = QtWidgets.QAction("按大小重排标签", self)
+        relabel_action.triggered.connect(self.run_relabel_components)
+        cc_menu.addAction(relabel_action)
+
+        conv_menu = common_filter_menu.addMenu("卷积与相关")
+        conv_action = QtWidgets.QAction("空间域卷积", self)
+        conv_action.triggered.connect(self.run_convolution)
+        conv_menu.addAction(conv_action)
+        fft_conv_action = QtWidgets.QAction("频域卷积(FFT)", self)
+        fft_conv_action.triggered.connect(self.run_fft_convolution)
+        conv_menu.addAction(fft_conv_action)
+        corr_action = QtWidgets.QAction("归一化相关(NCC)", self)
+        corr_action.triggered.connect(self.run_correlation_ncc)
+        conv_menu.addAction(corr_action)
+        fft_corr_action = QtWidgets.QAction("频域归一化相关(FFT NCC)", self)
+        fft_corr_action.triggered.connect(self.run_fft_correlation_ncc)
+        conv_menu.addAction(fft_corr_action)
+        streaming_fft_corr_action = QtWidgets.QAction("流式频域归一化相关", self)
+        streaming_fft_corr_action.triggered.connect(self.run_streaming_fft_correlation_ncc)
+        conv_menu.addAction(streaming_fft_corr_action)
+
+        dist_menu = common_filter_menu.addMenu("距离图")
+        maurer_action = QtWidgets.QAction("有符号 Maurer 距离图", self)
+        maurer_action.triggered.connect(self.run_signed_maurer_distance_map)
+        dist_menu.addAction(maurer_action)
+        danielsson_action = QtWidgets.QAction("Danielsson 距离图", self)
+        danielsson_action.triggered.connect(self.run_danielsson_distance_map)
+        dist_menu.addAction(danielsson_action)
+
+        edge_menu = common_filter_menu.addMenu("边缘检测")
+        canny_action = QtWidgets.QAction("Canny 边缘检测", self)
+        canny_action.triggered.connect(self.run_canny_edge)
+        edge_menu.addAction(canny_action)
+        sobel_action = QtWidgets.QAction("Sobel 梯度边缘", self)
+        sobel_action.triggered.connect(self.run_sobel_edge)
+        edge_menu.addAction(sobel_action)
+
+        grad_menu = common_filter_menu.addMenu("梯度与导数")
+        gm_action = QtWidgets.QAction("梯度幅值", self)
+        gm_action.triggered.connect(self.run_gradient_magnitude)
+        grad_menu.addAction(gm_action)
+        gmr_action = QtWidgets.QAction("递归高斯梯度幅值", self)
+        gmr_action.triggered.connect(self.run_gradient_magnitude_recursive_gaussian)
+        grad_menu.addAction(gmr_action)
+        deriv_action = QtWidgets.QAction("导数", self)
+        deriv_action.triggered.connect(self.run_derivative)
+        grad_menu.addAction(deriv_action)
+        if hasattr(sitk, "HigherOrderAccurateDerivativeImageFilter"):
+            hderiv_action = QtWidgets.QAction("高阶精确导数", self)
+            hderiv_action.triggered.connect(self.run_higher_order_accurate_derivative)
+            grad_menu.addAction(hderiv_action)
+
+        hessian_action = QtWidgets.QAction("Hessian 特征值分析", self)
+        hessian_action.triggered.connect(self.run_hessian_eigen_analysis)
+        common_filter_menu.addAction(hessian_action)
+
+        log_action = QtWidgets.QAction("高斯拉普拉斯(LoG)", self)
+        log_action.triggered.connect(self.run_laplacian_of_gaussian)
+        common_filter_menu.addAction(log_action)
         
         # 人工智能分割菜单
         ai_menu = tools_menu.addMenu("人工智能分割")

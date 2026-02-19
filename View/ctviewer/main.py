@@ -17,6 +17,7 @@ from .roi_operations import ROIOperations
 from .projection_operations import ProjectionOperations
 from .surface_area_operations import SurfaceAreaOperations
 from .enhancement_operations import EnhancementOperations
+from .common_image_filter_operations import CommonImageFilterOperations
 from Traditional.Segmentation.traditional_segmentation_operations import TraditionalSegmentationOperations
 
 
@@ -24,6 +25,7 @@ class CTViewer4(QtWidgets.QMainWindow, UIComponents, WindowLevelControl,
                 DataLoader, FilterOperations, CTOperations, AIOperations, 
                 MeasurementOperations, ROIOperations, ProjectionOperations,
                 SurfaceAreaOperations, EnhancementOperations,
+                CommonImageFilterOperations,
                 TraditionalSegmentationOperations):
     """
     四宫格 CT 浏览器：
@@ -79,6 +81,10 @@ class CTViewer4(QtWidgets.QMainWindow, UIComponents, WindowLevelControl,
         
         # 初始化传统分割功能
         TraditionalSegmentationOperations.__init__(self)
+
+        # 初始化通用滤波输出变量（便于调试和脚本访问）
+        if hasattr(self, '_ensure_common_filter_variables'):
+            self._ensure_common_filter_variables()
         
         # 初始化分割结果标志
         self.is_segmentation = False
