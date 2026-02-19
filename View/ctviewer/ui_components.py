@@ -762,57 +762,7 @@ class UIComponents:
         sep1.setStyleSheet("color:#4a4a4a;")
         main_console_layout.addWidget(sep1)
         
-        # 窗位/窗宽
-        ww_wl_group = QtWidgets.QGroupBox("窗宽窗位")
-        ww_wl_group.setStyleSheet("QGroupBox { font-weight: bold; padding-top: 10px; }")
-        ww_wl_group_layout = QtWidgets.QVBoxLayout(ww_wl_group)
-        ww_wl_group_layout.setSpacing(8)
-        
-        # 窗宽控制
-        ww_label = QtWidgets.QLabel("窗宽:")
-        ww_label.setStyleSheet("font-weight: normal;")
-        ww_wl_group_layout.addWidget(ww_label)
-        
-        self.ww_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.ww_slider.setMinimum(1)
-        self.ww_slider.setMaximum(65535)
-        self.ww_slider.setValue(65535)
-        self.ww_slider.valueChanged.connect(self.on_window_level_changed)
-        ww_wl_group_layout.addWidget(self.ww_slider)
-        
-        self.ww_value = QtWidgets.QLabel("65535")
-        self.ww_value.setAlignment(QtCore.Qt.AlignCenter)
-        self.ww_value.setStyleSheet("QLabel { font-weight: normal; background-color: #252525; color: #dcdcdc; padding: 3px; border: 1px solid #555; border-radius: 2px; }")
-        ww_wl_group_layout.addWidget(self.ww_value)
-        
-        ww_wl_group_layout.addSpacing(5)
-        
-        # 窗位控制
-        wl_label = QtWidgets.QLabel("窗位:")
-        wl_label.setStyleSheet("font-weight: normal;")
-        ww_wl_group_layout.addWidget(wl_label)
-        
-        self.wl_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
-        self.wl_slider.setMinimum(0)
-        self.wl_slider.setMaximum(65535)
-        self.wl_slider.setValue(32767)
-        self.wl_slider.valueChanged.connect(self.on_window_level_changed)
-        ww_wl_group_layout.addWidget(self.wl_slider)
-        
-        self.wl_value = QtWidgets.QLabel("32767")
-        self.wl_value.setAlignment(QtCore.Qt.AlignCenter)
-        self.wl_value.setStyleSheet("QLabel { font-weight: normal; background-color: #252525; color: #dcdcdc; padding: 3px; border: 1px solid #555; border-radius: 2px; }")
-        ww_wl_group_layout.addWidget(self.wl_value)
-        
-        ww_wl_group_layout.addSpacing(5)
-        
-        # 重置按钮
-        reset_btn = QtWidgets.QPushButton("重置")
-        reset_btn.setStyleSheet("QPushButton { font-weight: normal; padding: 5px; }")
-        reset_btn.clicked.connect(self.reset_window_level)
-        ww_wl_group_layout.addWidget(reset_btn)
-        
-        main_console_layout.addWidget(ww_wl_group)
+        # 窗宽窗位控制已迁移到右侧灰度直方图面板
 
         # 标注区
         annotation_group = QtWidgets.QGroupBox("标注区")
@@ -1429,7 +1379,36 @@ class UIComponents:
         top_row.addWidget(self.histogram_window_max_edit)
         histogram_ctrl_layout.addLayout(top_row)
 
-        # 第二行：高级绘图范围控制
+        # 第二行：窗宽/窗位滑条（从左侧迁移）
+        ww_row = QtWidgets.QHBoxLayout()
+        ww_row.addWidget(QtWidgets.QLabel("W:"))
+        self.ww_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.ww_slider.setMinimum(1)
+        self.ww_slider.setMaximum(65535)
+        self.ww_slider.setValue(65535)
+        self.ww_slider.valueChanged.connect(self.on_window_level_changed)
+        ww_row.addWidget(self.ww_slider, 1)
+        self.ww_value = QtWidgets.QLabel("65535")
+        self.ww_value.setMinimumWidth(58)
+        self.ww_value.setAlignment(QtCore.Qt.AlignCenter)
+        ww_row.addWidget(self.ww_value)
+        histogram_ctrl_layout.addLayout(ww_row)
+
+        wl_row = QtWidgets.QHBoxLayout()
+        wl_row.addWidget(QtWidgets.QLabel("L:"))
+        self.wl_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.wl_slider.setMinimum(0)
+        self.wl_slider.setMaximum(65535)
+        self.wl_slider.setValue(32767)
+        self.wl_slider.valueChanged.connect(self.on_window_level_changed)
+        wl_row.addWidget(self.wl_slider, 1)
+        self.wl_value = QtWidgets.QLabel("32767")
+        self.wl_value.setMinimumWidth(58)
+        self.wl_value.setAlignment(QtCore.Qt.AlignCenter)
+        wl_row.addWidget(self.wl_value)
+        histogram_ctrl_layout.addLayout(wl_row)
+
+        # 第三行：高级绘图范围控制
         adv_group = QtWidgets.QGroupBox("Advanced plot controls")
         adv_layout = QtWidgets.QVBoxLayout(adv_group)
         adv_layout.setContentsMargins(6, 8, 6, 6)
@@ -1480,7 +1459,7 @@ class UIComponents:
         adv_layout.addLayout(adv_btn_row)
         histogram_ctrl_layout.addWidget(adv_group)
 
-        # 第三行：bin width + home
+        # 第四行：bin width + home
         bottom_row = QtWidgets.QHBoxLayout()
         bottom_row.addWidget(QtWidgets.QLabel("bin width:"))
         self.histogram_bin_width_spin = QtWidgets.QSpinBox()
@@ -1494,6 +1473,30 @@ class UIComponents:
         self.histogram_home_btn.clicked.connect(self.on_histogram_home_clicked)
         bottom_row.addWidget(self.histogram_home_btn)
         histogram_ctrl_layout.addLayout(bottom_row)
+
+        # 第五行：窗口级别交互、区域自动窗调平、重置
+        wl_action_row = QtWidgets.QHBoxLayout()
+        self.window_level_interact_btn = QtWidgets.QToolButton()
+        self.window_level_interact_btn.setText("◐")
+        self.window_level_interact_btn.setCheckable(True)
+        self.window_level_interact_btn.setToolTip("窗口级别交互：在任意2D视图左键拖拽（上/下改窗位，左/右改窗宽）")
+        self.window_level_interact_btn.toggled.connect(self.on_window_level_interact_toggled)
+        wl_action_row.addWidget(self.window_level_interact_btn)
+
+        self.window_level_roi_btn = QtWidgets.QToolButton()
+        self.window_level_roi_btn.setText("▦")
+        self.window_level_roi_btn.setCheckable(True)
+        self.window_level_roi_btn.setToolTip("区域自动窗调平：在2D视图框选ROI后自动应用")
+        self.window_level_roi_btn.toggled.connect(self.on_window_level_roi_toggled)
+        wl_action_row.addWidget(self.window_level_roi_btn)
+
+        self.window_level_reset_btn = QtWidgets.QToolButton()
+        self.window_level_reset_btn.setText("↻")
+        self.window_level_reset_btn.setToolTip("重置窗宽窗位")
+        self.window_level_reset_btn.clicked.connect(self.reset_window_level)
+        wl_action_row.addWidget(self.window_level_reset_btn)
+        wl_action_row.addStretch()
+        histogram_ctrl_layout.addLayout(wl_action_row)
 
         mode_group = QtWidgets.QButtonGroup(self)
         mode_group.setExclusive(True)
@@ -1722,6 +1725,8 @@ class UIComponents:
         self.raw_array = None  # 原始数据（uint16）
         self.window_width = 65535
         self.window_level = 32767
+        self.window_level_drag_mode = False
+        self.window_level_roi_mode = False
     
     def create_placeholder_views(self):
         """创建占位符视图"""
@@ -1805,10 +1810,9 @@ class UIComponents:
             from matplotlib.colors import LinearSegmentedColormap
 
             current_xlim = None
+            # 仅复用用户已显式设置的绘图范围，避免首次绘制误用matplotlib默认(0,1)
             if self.histogram_plot_range is not None:
                 current_xlim = self.histogram_plot_range
-            elif hasattr(self.histogram_ax, 'get_xlim'):
-                current_xlim = self.histogram_ax.get_xlim()
 
             self.histogram_ax.clear()
             self.histogram_temp_label = None
@@ -2322,6 +2326,48 @@ class UIComponents:
             x0, x1 = self.histogram_ax.get_xlim()
             self.histogram_plot_min_edit.setText(f"{x0:.2f}")
             self.histogram_plot_max_edit.setText(f"{x1:.2f}")
+
+    def on_window_level_interact_toggled(self, checked):
+        """窗口级别拖拽模式开关"""
+        self.window_level_drag_mode = bool(checked)
+        if checked and hasattr(self, 'roi_mode') and self.roi_mode == 'selection' and hasattr(self, 'exit_roi_mode'):
+            self.exit_roi_mode()
+        if checked and hasattr(self, 'window_level_roi_btn') and self.window_level_roi_btn.isChecked():
+            self.window_level_roi_btn.blockSignals(True)
+            self.window_level_roi_btn.setChecked(False)
+            self.window_level_roi_btn.blockSignals(False)
+            self.window_level_roi_mode = False
+
+        if hasattr(self, 'statusBar'):
+            if self.window_level_drag_mode:
+                self.statusBar().showMessage("窗口级别模式：在任意2D视图左键拖拽，上下调整窗位，左右调整窗宽")
+            else:
+                self.statusBar().showMessage("窗口级别模式已关闭", 2000)
+
+    def on_window_level_roi_toggled(self, checked):
+        """区域自动窗调平模式开关"""
+        self.window_level_roi_mode = bool(checked)
+        if checked and hasattr(self, 'roi_mode') and self.roi_mode == 'selection' and hasattr(self, 'exit_roi_mode'):
+            self.exit_roi_mode()
+        if checked and hasattr(self, 'window_level_interact_btn') and self.window_level_interact_btn.isChecked():
+            self.window_level_interact_btn.blockSignals(True)
+            self.window_level_interact_btn.setChecked(False)
+            self.window_level_interact_btn.blockSignals(False)
+            self.window_level_drag_mode = False
+
+        if not checked:
+            for viewer_name in ('axial_viewer', 'sag_viewer', 'cor_viewer'):
+                viewer = getattr(self, viewer_name, None)
+                if viewer is not None and hasattr(viewer, '_clear_window_level_roi_rect'):
+                    viewer._clear_window_level_roi_rect()
+                    viewer._wl_roi_selecting = False
+                    viewer._wl_roi_start = None
+
+        if hasattr(self, 'statusBar'):
+            if self.window_level_roi_mode:
+                self.statusBar().showMessage("区域自动窗调平：在任意2D视图左键拖动框选ROI，松开后自动应用")
+            else:
+                self.statusBar().showMessage("区域自动窗调平已关闭", 2000)
     
     def _update_status_bar(self, data_min, data_max, data_mean, data_std):
         """

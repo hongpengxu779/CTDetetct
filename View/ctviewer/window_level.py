@@ -9,6 +9,101 @@ from PyQt5 import QtWidgets, QtCore
 
 class WindowLevelControl:
     """窗宽窗位控制类，作为Mixin使用"""
+
+    def apply_window_level_drag_delta(self, delta_x, delta_y):
+        """在2D视图拖拽时调整窗宽窗位（左右改窗宽，上下改窗位）"""
+        if self.raw_array is None:
+            return
+        if not hasattr(self, 'ww_slider') or not hasattr(self, 'wl_slider'):
+            return
+
+        if hasattr(self, 'histogram_data_range'):
+            data_min, data_max = self.histogram_data_range
+            data_span = max(1.0, float(data_max - data_min))
+        else:
+            data_span = max(1.0, float(self.raw_array.max() - self.raw_array.min()))
+
+        sensitivity = max(1.0, data_span / 512.0)
+        new_width = float(self.window_width) + float(delta_x) * sensitivity
+        new_level = float(self.window_level) - float(delta_y) * sensitivity
+
+        ww_min, ww_max = self.ww_slider.minimum(), self.ww_slider.maximum()
+        wl_min, wl_max = self.wl_slider.minimum(), self.wl_slider.maximum()
+        new_width = int(round(max(ww_min, min(ww_max, new_width))))
+        new_level = int(round(max(wl_min, min(wl_max, new_level))))
+
+        self.ww_slider.setValue(new_width)
+        self.wl_slider.setValue(new_level)
+
+    def apply_window_level_from_roi(self, view_type, slice_index, x0, y0, x1, y1):
+        """根据2D视图ROI计算窗宽窗位并应用到当前数据集"""
+        if self.array is None:
+            return False
+        if not hasattr(self, 'ww_slider') or not hasattr(self, 'wl_slider'):
+            return False
+
+        x_min, x_max = sorted((int(x0), int(x1)))
+        y_min, y_max = sorted((int(y0), int(y1)))
+
+        try:
+            if view_type == 'axial':
+                if not (0 <= slice_index < self.array.shape[0]):
+                    return False
+                x_min = max(0, min(self.array.shape[2] - 1, x_min))
+                x_max = max(0, min(self.array.shape[2] - 1, x_max))
+                y_min = max(0, min(self.array.shape[1] - 1, y_min))
+                y_max = max(0, min(self.array.shape[1] - 1, y_max))
+                roi = self.array[slice_index, y_min:y_max + 1, x_min:x_max + 1]
+
+            elif view_type == 'sagittal':
+                if not (0 <= slice_index < self.array.shape[2]):
+                    return False
+                x_min = max(0, min(self.array.shape[1] - 1, x_min))
+                x_max = max(0, min(self.array.shape[1] - 1, x_max))
+                y_min = max(0, min(self.array.shape[0] - 1, y_min))
+                y_max = max(0, min(self.array.shape[0] - 1, y_max))
+                roi = self.array[y_min:y_max + 1, x_min:x_max + 1, slice_index]
+
+            elif view_type == 'coronal':
+                if not (0 <= slice_index < self.array.shape[1]):
+                    return False
+                x_min = max(0, min(self.array.shape[2] - 1, x_min))
+                x_max = max(0, min(self.array.shape[2] - 1, x_max))
+                y_min = max(0, min(self.array.shape[0] - 1, y_min))
+                y_max = max(0, min(self.array.shape[0] - 1, y_max))
+                roi = self.array[y_min:y_max + 1, slice_index, x_min:x_max + 1]
+            else:
+                return False
+
+            if roi.size == 0:
+                return False
+
+            roi_min = float(np.min(roi))
+            roi_max = float(np.max(roi))
+            if roi_max <= roi_min:
+                return False
+
+            new_width = roi_max - roi_min
+            new_level = 0.5 * (roi_max + roi_min)
+
+            ww_min, ww_max = self.ww_slider.minimum(), self.ww_slider.maximum()
+            wl_min, wl_max = self.wl_slider.minimum(), self.wl_slider.maximum()
+            width_int = int(round(max(ww_min, min(ww_max, new_width))))
+            level_int = int(round(max(wl_min, min(wl_max, new_level))))
+
+            self.ww_slider.setValue(width_int)
+            self.wl_slider.setValue(level_int)
+
+            if hasattr(self, 'statusBar'):
+                self.statusBar().showMessage(
+                    f"ROI自动窗调平已应用: W={width_int}, L={level_int}",
+                    3500
+                )
+            return True
+
+        except Exception as exc:
+            print(f"ROI自动窗调平失败: {exc}")
+            return False
     
     def on_window_level_changed(self):
         """窗宽窗位改变时的处理"""

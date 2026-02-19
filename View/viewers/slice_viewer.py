@@ -74,6 +74,11 @@ class SliceViewer(QtWidgets.QWidget):
         self.flip_horizontal = False
         self.flip_vertical = False
         self.rotation_angle = 0.0
+        self._wl_drag_active = False
+        self._wl_drag_start_pos = None
+        self._wl_roi_selecting = False
+        self._wl_roi_start = None
+        self._wl_roi_rect_item = None
         
         # 确定视图类型
         if "Axial" in title:
@@ -472,6 +477,39 @@ class SliceViewer(QtWidgets.QWidget):
                 new_value = max(0, min(self.max_index - 1, self.slider.value() + step))
                 self.slider.setValue(new_value)
                 return True
+
+            # 窗口级别交互（优先级高于默认平移/缩放）
+            if self.measurement_mode is None and self.roi_mode is None and self.parent_viewer is not None:
+                if getattr(self.parent_viewer, 'window_level_drag_mode', False):
+                    if event.type() == QtCore.QEvent.MouseButtonPress and event.button() == QtCore.Qt.LeftButton:
+                        self._wl_drag_active = True
+                        self._wl_drag_start_pos = event.pos()
+                        self.view.viewport().setCursor(QtCore.Qt.SizeAllCursor)
+                        return True
+
+                    if event.type() == QtCore.QEvent.MouseMove and self._wl_drag_active and self._wl_drag_start_pos is not None:
+                        dx = event.pos().x() - self._wl_drag_start_pos.x()
+                        dy = event.pos().y() - self._wl_drag_start_pos.y()
+                        if hasattr(self.parent_viewer, 'apply_window_level_drag_delta'):
+                            self.parent_viewer.apply_window_level_drag_delta(dx, dy)
+                        self._wl_drag_start_pos = event.pos()
+                        return True
+
+                    if event.type() == QtCore.QEvent.MouseButtonRelease and event.button() == QtCore.Qt.LeftButton:
+                        self._wl_drag_active = False
+                        self._wl_drag_start_pos = None
+                        self.view.viewport().setCursor(QtCore.Qt.ArrowCursor)
+                        return True
+
+                if getattr(self.parent_viewer, 'window_level_roi_mode', False):
+                    if event.type() == QtCore.QEvent.MouseButtonPress and event.button() == QtCore.Qt.LeftButton:
+                        return self._handle_window_level_roi_press(event)
+
+                    if event.type() == QtCore.QEvent.MouseMove and self._wl_roi_selecting:
+                        return self._handle_window_level_roi_move(event)
+
+                    if event.type() == QtCore.QEvent.MouseButtonRelease and event.button() == QtCore.Qt.LeftButton:
+                        return self._handle_window_level_roi_release(event)
 
             # 中键缩放
             if self.measurement_mode is None and self.roi_mode is None:
@@ -2589,3 +2627,73 @@ class SliceViewer(QtWidgets.QWidget):
         # array_to_qpixmap会自动进行归一化，无需传递窗宽窗位参数
         pixmap = array_to_qpixmap(arr)
         return pixmap
+
+    def _handle_window_level_roi_press(self, event):
+        """窗口级别ROI模式：鼠标按下"""
+        scene_pos = self.constrain_point_to_image(self.view.mapToScene(event.pos()))
+        self._wl_roi_selecting = True
+        self._wl_roi_start = scene_pos
+        self._clear_window_level_roi_rect()
+
+        pen = QtGui.QPen(QtGui.QColor(255, 220, 0))
+        pen.setWidth(1)
+        pen.setStyle(QtCore.Qt.DashLine)
+        self._wl_roi_rect_item = self.scene.addRect(QtCore.QRectF(scene_pos, scene_pos), pen)
+        self.view.viewport().setCursor(QtCore.Qt.CrossCursor)
+        return True
+
+    def _handle_window_level_roi_move(self, event):
+        """窗口级别ROI模式：鼠标移动"""
+        if not self._wl_roi_selecting or self._wl_roi_rect_item is None or self._wl_roi_start is None:
+            return False
+
+        current_pos = self.constrain_point_to_image(self.view.mapToScene(event.pos()))
+        rect = QtCore.QRectF(self._wl_roi_start, current_pos).normalized()
+        self._wl_roi_rect_item.setRect(rect)
+
+        if self.parent_viewer and hasattr(self.parent_viewer, 'statusBar'):
+            self.parent_viewer.statusBar().showMessage(
+                f"窗口级别ROI: {int(rect.width())} x {int(rect.height())}"
+            )
+        return True
+
+    def _handle_window_level_roi_release(self, event):
+        """窗口级别ROI模式：鼠标释放并应用"""
+        if not self._wl_roi_selecting or self._wl_roi_start is None:
+            return False
+
+        end_pos = self.constrain_point_to_image(self.view.mapToScene(event.pos()))
+        rect = QtCore.QRectF(self._wl_roi_start, end_pos).normalized()
+
+        self._wl_roi_selecting = False
+        self._wl_roi_start = None
+        self._clear_window_level_roi_rect()
+        self.view.viewport().setCursor(QtCore.Qt.ArrowCursor)
+
+        if rect.width() < 3 or rect.height() < 3:
+            return True
+
+        if self.parent_viewer and hasattr(self.parent_viewer, 'apply_window_level_from_roi'):
+            applied = self.parent_viewer.apply_window_level_from_roi(
+                self.view_type,
+                self.slider.value(),
+                int(rect.left()),
+                int(rect.top()),
+                int(rect.right()),
+                int(rect.bottom())
+            )
+            if applied and hasattr(self.parent_viewer, 'window_level_roi_btn'):
+                self.parent_viewer.window_level_roi_btn.blockSignals(True)
+                self.parent_viewer.window_level_roi_btn.setChecked(False)
+                self.parent_viewer.window_level_roi_btn.blockSignals(False)
+                self.parent_viewer.window_level_roi_mode = False
+        return True
+
+    def _clear_window_level_roi_rect(self):
+        """清理窗口级别ROI临时框"""
+        if self._wl_roi_rect_item is not None:
+            try:
+                self.scene.removeItem(self._wl_roi_rect_item)
+            except Exception:
+                pass
+            self._wl_roi_rect_item = None
