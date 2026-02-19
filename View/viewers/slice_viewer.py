@@ -71,6 +71,9 @@ class SliceViewer(QtWidgets.QWidget):
         self.is_panning = False
         self.is_zooming = False
         self.last_mouse_pos = None
+        self.flip_horizontal = False
+        self.flip_vertical = False
+        self.rotation_angle = 0.0
         
         # 确定视图类型
         if "Axial" in title:
@@ -272,6 +275,53 @@ class SliceViewer(QtWidgets.QWidget):
             print(f"打开缩放窗口时出错: {str(e)}")
             QtWidgets.QMessageBox.warning(self, "错误", f"无法打开缩放窗口：{str(e)}")
 
+    def _apply_transform_to_pixmap(self, pixmap):
+        """将当前翻转/旋转状态应用到QPixmap"""
+        if pixmap is None or pixmap.isNull():
+            return pixmap
+
+        angle = float(self.rotation_angle) % 360.0
+        need_transform = self.flip_horizontal or self.flip_vertical or abs(angle) > 1e-6
+        if not need_transform:
+            return pixmap
+
+        transform = QtGui.QTransform()
+        sx = -1.0 if self.flip_horizontal else 1.0
+        sy = -1.0 if self.flip_vertical else 1.0
+        transform.scale(sx, sy)
+        if abs(angle) > 1e-6:
+            transform.rotate(angle)
+        return pixmap.transformed(transform, QtCore.Qt.SmoothTransformation)
+
+    def _refresh_current_slice(self):
+        self.update_slice(self.slider.value())
+
+    def toggle_flip_horizontal(self):
+        self.flip_horizontal = not self.flip_horizontal
+        self._refresh_current_slice()
+
+    def toggle_flip_vertical(self):
+        self.flip_vertical = not self.flip_vertical
+        self._refresh_current_slice()
+
+    def rotate_clockwise_90(self):
+        self.rotation_angle = (self.rotation_angle + 90.0) % 360.0
+        self._refresh_current_slice()
+
+    def rotate_counter_clockwise_90(self):
+        self.rotation_angle = (self.rotation_angle - 90.0) % 360.0
+        self._refresh_current_slice()
+
+    def rotate_by_angle(self, delta_angle):
+        self.rotation_angle = (self.rotation_angle + float(delta_angle)) % 360.0
+        self._refresh_current_slice()
+
+    def reset_image_transform(self):
+        self.flip_horizontal = False
+        self.flip_vertical = False
+        self.rotation_angle = 0.0
+        self._refresh_current_slice()
+
     def update_slice(self, idx):
         """
         槽函数：当滑动条的值变化时，更新 QLabel 显示新的切片。
@@ -286,6 +336,7 @@ class SliceViewer(QtWidgets.QWidget):
 
         # 将 numpy 数组转换为 QPixmap（灰度图）
         pix = array_to_qpixmap(arr)
+        pix = self._apply_transform_to_pixmap(pix)
         
         # 更新图像项
         self.pixmap_item.setPixmap(pix)
@@ -411,6 +462,10 @@ class SliceViewer(QtWidgets.QWidget):
     def eventFilter(self, obj, event):
         """事件过滤器，处理鼠标事件"""
         if obj == self.view.viewport():
+            if event.type() in (QtCore.QEvent.MouseButtonPress, QtCore.QEvent.Wheel):
+                if self.parent_viewer is not None:
+                    self.parent_viewer.active_view = self.view_type
+
             if event.type() == QtCore.QEvent.Wheel:
                 delta = event.angleDelta().y()
                 step = 1 if delta > 0 else -1

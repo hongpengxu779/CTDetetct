@@ -276,13 +276,16 @@ class DataLoader:
                 # RGB图像的切片获取
                 self.axial_viewer = SliceViewer("Axial (彩色)",
                                           lambda z: self.rgb_array[z, :, :, :],
-                                          self.depth_z)
+                                                                                    self.depth_z,
+                                                                                    parent_viewer=self)
                 self.sag_viewer = SliceViewer("Sagittal (彩色)",
                                         lambda x: self.rgb_array[:, :, x, :],
-                                        self.depth_x)
+                                                                                self.depth_x,
+                                                                                parent_viewer=self)
                 self.cor_viewer = SliceViewer("Coronal (彩色)",
                                         lambda y: self.rgb_array[:, y, :, :],
-                                        self.depth_y)
+                                                                                self.depth_y,
+                                                                                parent_viewer=self)
             else:
                 # 灰度图像的切片获取
                 # 如果是分割结果，使用优化的显示映射而不是窗宽窗位
@@ -313,6 +316,8 @@ class DataLoader:
                                             lambda y: self.apply_window_level_to_slice(self.array[:, y, :]),
                                             self.depth_y,
                                             parent_viewer=self)
+
+                    self.active_view = 'axial'
             
             # 更新ROI Z范围滑动条
             if hasattr(self, 'roi_z_min_slider'):

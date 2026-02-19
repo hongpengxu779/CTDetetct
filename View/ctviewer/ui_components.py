@@ -706,6 +706,57 @@ class UIComponents:
             ops_layout.addWidget(btn, idx // 4, idx % 4)
         main_console_layout.addWidget(ops_group)
 
+        # 翻转/旋转面板
+        flip_rotate_group = QtWidgets.QGroupBox("翻转/旋转")
+        flip_rotate_layout = QtWidgets.QGridLayout(flip_rotate_group)
+        flip_rotate_layout.setSpacing(4)
+
+        flip_h_btn = QtWidgets.QToolButton()
+        flip_h_btn.setText("水平翻转")
+        flip_h_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+        flip_h_btn.clicked.connect(self.flip_current_view_horizontal)
+        flip_rotate_layout.addWidget(flip_h_btn, 0, 0)
+
+        flip_v_btn = QtWidgets.QToolButton()
+        flip_v_btn.setText("垂直翻转")
+        flip_v_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+        flip_v_btn.clicked.connect(self.flip_current_view_vertical)
+        flip_rotate_layout.addWidget(flip_v_btn, 0, 1)
+
+        rot_cw_90_btn = QtWidgets.QToolButton()
+        rot_cw_90_btn.setText("旋转+90°")
+        rot_cw_90_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+        rot_cw_90_btn.clicked.connect(self.rotate_current_view_cw_90)
+        flip_rotate_layout.addWidget(rot_cw_90_btn, 1, 0)
+
+        rot_ccw_90_btn = QtWidgets.QToolButton()
+        rot_ccw_90_btn.setText("旋转-90°")
+        rot_ccw_90_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+        rot_ccw_90_btn.clicked.connect(self.rotate_current_view_ccw_90)
+        flip_rotate_layout.addWidget(rot_ccw_90_btn, 1, 1)
+
+        angle_label = QtWidgets.QLabel("角度")
+        flip_rotate_layout.addWidget(angle_label, 2, 0)
+        self.rotate_step_spin = QtWidgets.QSpinBox()
+        self.rotate_step_spin.setRange(1, 180)
+        self.rotate_step_spin.setValue(10)
+        self.rotate_step_spin.setSuffix("°")
+        flip_rotate_layout.addWidget(self.rotate_step_spin, 2, 1)
+
+        rot_cw_btn = QtWidgets.QToolButton()
+        rot_cw_btn.setText("顺时针")
+        rot_cw_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+        rot_cw_btn.clicked.connect(lambda: self.rotate_current_view_by_step(True))
+        flip_rotate_layout.addWidget(rot_cw_btn, 3, 0)
+
+        rot_ccw_btn = QtWidgets.QToolButton()
+        rot_ccw_btn.setText("逆时针")
+        rot_ccw_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+        rot_ccw_btn.clicked.connect(lambda: self.rotate_current_view_by_step(False))
+        flip_rotate_layout.addWidget(rot_ccw_btn, 3, 1)
+
+        main_console_layout.addWidget(flip_rotate_group)
+
         sep1 = QtWidgets.QFrame()
         sep1.setFrameShape(QtWidgets.QFrame.HLine)
         sep1.setStyleSheet("color:#4a4a4a;")
@@ -2033,13 +2084,16 @@ class UIComponents:
                 # RGB图像的切片获取
                 self.axial_viewer = SliceViewer("Axial (彩色)",
                                           lambda z: self.rgb_array[z, :, :, :],
-                                          self.depth_z)
+                                                                                    self.depth_z,
+                                                                                    parent_viewer=self)
                 self.sag_viewer = SliceViewer("Sagittal (彩色)",
                                         lambda x: self.rgb_array[:, :, x, :],
-                                        self.depth_x)
+                                                                                self.depth_x,
+                                                                                parent_viewer=self)
                 self.cor_viewer = SliceViewer("Coronal (彩色)",
                                         lambda y: self.rgb_array[:, y, :, :],
-                                        self.depth_y)
+                                                                                self.depth_y,
+                                                                                parent_viewer=self)
             else:
                 # 灰度图像的切片获取
                 self.axial_viewer = SliceViewer("Axial",
@@ -2094,6 +2148,8 @@ class UIComponents:
                 info_label.setAlignment(QtCore.Qt.AlignCenter)
                 info_label.setStyleSheet("QLabel { background-color: #4a0000; color: #d0d0d0; font-size: 14pt; }")
                 self.grid_layout.addWidget(info_label, 0, 0)
+
+            self.active_view = 'axial'
             
             # 更新窗口标题
             self.setWindowTitle(f"CT Viewer - {data_name}")
@@ -2366,10 +2422,69 @@ class UIComponents:
             return max(1, int(self.slice_step_spin.value()))
         return 1
 
+    def _get_active_slice_viewer(self):
+        active_view = getattr(self, 'active_view', None)
+        mapping = {
+            'axial': getattr(self, 'axial_viewer', None),
+            'coronal': getattr(self, 'cor_viewer', None),
+            'sagittal': getattr(self, 'sag_viewer', None),
+        }
+        viewer = mapping.get(active_view)
+        if viewer is not None:
+            return viewer
+        for name in ["axial_viewer", "cor_viewer", "sag_viewer"]:
+            candidate = getattr(self, name, None)
+            if candidate is not None:
+                return candidate
+        return None
+
+    def _active_view_name(self, viewer):
+        if viewer is None:
+            return "视图"
+        return getattr(viewer, 'title', '视图')
+
+    def flip_current_view_horizontal(self):
+        viewer = self._get_active_slice_viewer()
+        if viewer and hasattr(viewer, 'toggle_flip_horizontal'):
+            viewer.toggle_flip_horizontal()
+            self.statusBar().showMessage(f"{self._active_view_name(viewer)}：已水平翻转", 2000)
+
+    def flip_current_view_vertical(self):
+        viewer = self._get_active_slice_viewer()
+        if viewer and hasattr(viewer, 'toggle_flip_vertical'):
+            viewer.toggle_flip_vertical()
+            self.statusBar().showMessage(f"{self._active_view_name(viewer)}：已垂直翻转", 2000)
+
+    def rotate_current_view_cw_90(self):
+        viewer = self._get_active_slice_viewer()
+        if viewer and hasattr(viewer, 'rotate_clockwise_90'):
+            viewer.rotate_clockwise_90()
+            self.statusBar().showMessage(f"{self._active_view_name(viewer)}：已顺时针旋转90°", 2000)
+
+    def rotate_current_view_ccw_90(self):
+        viewer = self._get_active_slice_viewer()
+        if viewer and hasattr(viewer, 'rotate_counter_clockwise_90'):
+            viewer.rotate_counter_clockwise_90()
+            self.statusBar().showMessage(f"{self._active_view_name(viewer)}：已逆时针旋转90°", 2000)
+
+    def rotate_current_view_by_step(self, clockwise=True):
+        viewer = self._get_active_slice_viewer()
+        if viewer is None or not hasattr(viewer, 'rotate_by_angle'):
+            return
+        step = int(self.rotate_step_spin.value()) if hasattr(self, 'rotate_step_spin') else 10
+        delta = step if clockwise else -step
+        viewer.rotate_by_angle(delta)
+        direction = "顺时针" if clockwise else "逆时针"
+        self.statusBar().showMessage(f"{self._active_view_name(viewer)}：{direction}旋转{step}°", 2000)
+
     def flip_current_view(self):
-        self.statusBar().showMessage("翻转视图功能入口已启用", 2000)
+        self.flip_current_view_horizontal()
 
     def reset_view_transform(self):
+        for viewer_name in ["axial_viewer", "cor_viewer", "sag_viewer"]:
+            viewer = getattr(self, viewer_name, None)
+            if viewer and hasattr(viewer, 'reset_image_transform'):
+                viewer.reset_image_transform()
         self.update_all_views()
         self.statusBar().showMessage("视图变换已重置", 2000)
 
