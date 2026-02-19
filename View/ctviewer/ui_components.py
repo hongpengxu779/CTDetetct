@@ -331,6 +331,9 @@ class UIComponents:
         self.cine_timer.setInterval(90)
         self.cine_timer.timeout.connect(self._cine_tick)
 
+        self.stop_cine_shortcut = QtWidgets.QShortcut(QtGui.QKeySequence("Esc"), self)
+        self.stop_cine_shortcut.activated.connect(self.stop_cine_via_shortcut)
+
         # 第一组：基础文件操作
         primary_toolbar = QtWidgets.QToolBar("主工具栏", self)
         primary_toolbar.setMovable(False)
@@ -2316,6 +2319,14 @@ class UIComponents:
     def _stop_cine_if_running(self):
         if hasattr(self, 'cine_action') and self.cine_action.isChecked():
             self.cine_action.setChecked(False)
+
+    def stop_cine_via_shortcut(self):
+        if hasattr(self, 'cine_timer') and self.cine_timer.isActive():
+            if hasattr(self, 'cine_action') and self.cine_action.isChecked():
+                self.cine_action.setChecked(False)
+            else:
+                self.cine_timer.stop()
+            self.statusBar().showMessage("已通过 Esc 停止自动滚片", 2000)
 
     def _sync_manipulate_action(self, mode):
         if not hasattr(self, 'manipulate_action_group'):
