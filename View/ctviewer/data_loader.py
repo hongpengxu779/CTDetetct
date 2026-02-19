@@ -349,6 +349,8 @@ class DataLoader:
                 self.volume_viewer = VolumeViewer(self.array, self.spacing, simplified=True, downsample_factor=1)
                 if hasattr(self.volume_viewer, 'set_background_color'):
                     self.volume_viewer.set_background_color((0.45, 0.08, 0.08))
+                if hasattr(self, 'apply_current_3d_controls'):
+                    self.apply_current_3d_controls()
                 
                 # 四宫格布局
                 self.grid_layout.addWidget(self.volume_viewer, 0, 0)
@@ -433,6 +435,8 @@ class DataLoader:
         self.volume_viewer = VolumeViewer(self.array, self.spacing, simplified=True, downsample_factor=1)
         if hasattr(self.volume_viewer, 'set_background_color'):
             self.volume_viewer.set_background_color((0.45, 0.08, 0.08))
+        if hasattr(self, 'apply_current_3d_controls'):
+            self.apply_current_3d_controls()
         
         # 应用与load_reconstructed_data相同的3D视图参数调整
         self.volume_viewer.adjust_contrast(opacity_scale=1.5)
@@ -532,6 +536,8 @@ class DataLoader:
             
             # 针对重建数据特点自动调整3D视图参数
             self.volume_viewer.adjust_contrast(opacity_scale=1.5)
+            if hasattr(self, 'apply_current_3d_controls'):
+                self.apply_current_3d_controls()
             
             progress.setValue(4)
             QtWidgets.QApplication.processEvents()
@@ -713,6 +719,8 @@ class DataLoader:
             
             # 针对重建数据特点自动调整3D视图参数
             self.volume_viewer.adjust_contrast(opacity_scale=1.5)
+            if hasattr(self, 'apply_current_3d_controls'):
+                self.apply_current_3d_controls()
             
             progress.setValue(95)
             progress.setLabelText("布局视图...")

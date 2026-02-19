@@ -852,6 +852,7 @@ class UIComponents:
         mode_row.addWidget(QtWidgets.QLabel("视图模式:"))
         self.view_mode_combo = QtWidgets.QComboBox()
         self.view_mode_combo.addItems(["2D", "3D", "2D+3D"])
+        self.view_mode_combo.setCurrentIndex(2)
         mode_row.addWidget(self.view_mode_combo)
         scene_layout.addLayout(mode_row)
 
@@ -934,6 +935,36 @@ class UIComponents:
         export_screen_btn.clicked.connect(self.export_screenshot)
         unit_layout.addWidget(export_screen_btn)
         main_console_layout.addWidget(unit_group)
+
+        # 场景/光照控制事件绑定
+        self.view_mode_combo.currentTextChanged.connect(lambda _: self.apply_scene_view_options())
+        for _cb in [
+            self.chk_show_scale,
+            self.chk_show_legend,
+            self.chk_show_annotations,
+            self.chk_show_crosshair,
+            self.chk_orthogonal_projection,
+            self.chk_reduce_quality_during_op,
+            self.chk_best_quality,
+            self.chk_show_orientation,
+        ]:
+            _cb.toggled.connect(lambda _: self.apply_scene_view_options())
+
+        for _slider in [
+            self.light_pos_slider,
+            self.light_intensity_slider,
+            self.shadow_strength_slider,
+            self.shadow_alpha_slider,
+            self.brightness_slider,
+            self.spot_slider,
+            self.specular_slider,
+            self.scatter_slider,
+        ]:
+            _slider.valueChanged.connect(lambda _: self.apply_3d_lighting_settings())
+
+        self.chk_auto_focus.toggled.connect(lambda _: self.apply_3d_focus_settings())
+        self.focus_distance_slider.valueChanged.connect(lambda _: self.apply_3d_focus_settings())
+        self.depth_of_field_slider.valueChanged.connect(lambda _: self.apply_3d_focus_settings())
 
         # 2D视图
         view2d_group = QtWidgets.QGroupBox("2D视图")
@@ -1744,6 +1775,12 @@ class UIComponents:
         self.window_level_drag_mode = False
         self.window_level_roi_mode = False
         self.move_tool_enabled = False
+
+        # 兜底：确保默认场景模式为2D+3D
+        if hasattr(self, 'view_mode_combo'):
+            self.view_mode_combo.setCurrentIndex(2)
+            if hasattr(self, 'apply_scene_view_options'):
+                self.apply_scene_view_options()
     
     def create_placeholder_views(self):
         """创建占位符视图"""
@@ -2625,6 +2662,8 @@ class UIComponents:
                 self.volume_viewer = VolumeViewer(self.array, self.spacing, simplified=True, downsample_factor=1)
                 if hasattr(self.volume_viewer, 'set_background_color'):
                     self.volume_viewer.set_background_color((0.45, 0.08, 0.08))
+                if hasattr(self, 'apply_current_3d_controls'):
+                    self.apply_current_3d_controls()
                 
                 # 四宫格布局
                 self.grid_layout.addWidget(self.volume_viewer, 0, 0)
@@ -3015,10 +3054,9 @@ class UIComponents:
         QtWidgets.QMessageBox.information(self, "文本注释", "文本注释入口已预留。")
 
     def on_render_mode_changed(self, mode):
-        if mode == "MIP":
-            self.create_mip_projection(axis=0, use_roi=True)
-        elif mode == "MinIP":
-            self.create_minip_projection(axis=0, use_roi=True)
+        if self.volume_viewer and hasattr(self.volume_viewer, 'set_render_mode'):
+            self.volume_viewer.set_render_mode(mode)
+            self.statusBar().showMessage(f"3D渲染模式：{mode}", 1500)
 
     def change_background_color(self):
         color = QtWidgets.QColorDialog.getColor(parent=self)
@@ -3028,16 +3066,57 @@ class UIComponents:
             self.volume_viewer.set_background_color((color.redF(), color.greenF(), color.blueF()))
 
     def export_screenshot(self):
+        filepath, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "导出截屏",
+            "",
+            "PNG Files (*.png);;JPEG Files (*.jpg *.jpeg)"
+        )
+        if not filepath:
+            return
+
+        if self.volume_viewer and hasattr(self.volume_viewer, 'save_screenshot') and filepath.lower().endswith('.png'):
+            ok = self.volume_viewer.save_screenshot(filepath)
+            if ok:
+                self.statusBar().showMessage(f"已导出3D截屏：{filepath}", 2500)
+                return
+
         pix = self.grab()
-        filepath, _ = QtWidgets.QFileDialog.getSaveFileName(self, "导出截屏", "", "PNG Files (*.png)")
-        if filepath:
-            pix.save(filepath)
+        if pix.save(filepath):
+            self.statusBar().showMessage(f"已导出截屏：{filepath}", 2500)
+        else:
+            QtWidgets.QMessageBox.warning(self, "导出失败", "截屏保存失败，请检查路径或格式。")
 
     def switch_2d_view(self, view_name):
+        mapping = {
+            "side": ("sagittal", getattr(self, 'sag_viewer', None)),
+            "front": ("coronal", getattr(self, 'cor_viewer', None)),
+            "back": ("axial", getattr(self, 'axial_viewer', None)),
+        }
+        active_name, viewer = mapping.get(view_name, ("axial", getattr(self, 'axial_viewer', None)))
+        self.active_view = active_name
+        if viewer is not None:
+            viewer.setFocus()
         self.statusBar().showMessage(f"2D视图切换：{view_name}", 2000)
 
     def configure_visible_plane(self):
-        self.statusBar().showMessage("可视平面设置入口已启用", 2000)
+        options = ["全部显示", "仅轴位", "仅冠状", "仅矢状"]
+        choice, ok = QtWidgets.QInputDialog.getItem(self, "可视平面", "选择显示平面", options, 0, False)
+        if not ok:
+            return
+
+        show_axial = choice in ("全部显示", "仅轴位")
+        show_cor = choice in ("全部显示", "仅冠状")
+        show_sag = choice in ("全部显示", "仅矢状")
+
+        if getattr(self, 'axial_viewer', None):
+            self.axial_viewer.setVisible(show_axial)
+        if getattr(self, 'cor_viewer', None):
+            self.cor_viewer.setVisible(show_cor)
+        if getattr(self, 'sag_viewer', None):
+            self.sag_viewer.setVisible(show_sag)
+
+        self.statusBar().showMessage(f"可视平面：{choice}", 2000)
 
     def postprocess_smooth(self):
         self.statusBar().showMessage("分割后处理：平滑", 2000)
@@ -3070,7 +3149,89 @@ class UIComponents:
         QtWidgets.QMessageBox.information(self, "导出图层", "导出当前图层入口已启用。")
 
     def apply_3d_preset(self, preset_name):
+        presets = {
+            "骨骼": dict(mode="表面渲染", opacity=92, specular=55, brightness=70, scatter=35),
+            "血管": dict(mode="MIP", opacity=80, specular=45, brightness=65, scatter=30),
+            "CTA": dict(mode="体渲染", opacity=85, specular=50, brightness=68, scatter=42),
+            "软组织": dict(mode="默认", opacity=72, specular=25, brightness=52, scatter=60),
+            "高对比": dict(mode="ISO", opacity=95, specular=60, brightness=75, scatter=25),
+            "低噪声": dict(mode="体渲染", opacity=70, specular=18, brightness=50, scatter=72),
+        }
+        cfg = presets.get(preset_name)
+        if not cfg:
+            return
+
+        if hasattr(self, 'opacity_3d_slider'):
+            self.opacity_3d_slider.setValue(int(cfg["opacity"]))
+        self.specular_slider.setValue(int(cfg["specular"]))
+        self.brightness_slider.setValue(int(cfg["brightness"]))
+        self.scatter_slider.setValue(int(cfg["scatter"]))
+        self.render_mode_combo.setCurrentText(cfg["mode"])
+
+        self.apply_scene_view_options()
+        self.apply_3d_lighting_settings()
         self.statusBar().showMessage(f"应用3D预设：{preset_name}", 2000)
+
+    def apply_scene_view_options(self):
+        """应用场景视图相关选项到2D/3D视图。"""
+        mode = self.view_mode_combo.currentText() if hasattr(self, 'view_mode_combo') else "2D+3D"
+
+        volume_visible = (mode in ("3D", "2D+3D"))
+        slice_visible = (mode in ("2D", "2D+3D"))
+
+        if getattr(self, 'volume_viewer', None):
+            self.volume_viewer.setVisible(volume_visible)
+
+        for viewer_name in ('axial_viewer', 'sag_viewer', 'cor_viewer'):
+            viewer = getattr(self, viewer_name, None)
+            if viewer is None:
+                continue
+            viewer.setVisible(slice_visible)
+            if hasattr(viewer, 'title_label'):
+                viewer.title_label.setVisible(self.chk_show_annotations.isChecked())
+            if hasattr(viewer, '_redraw_crosshair'):
+                viewer._redraw_crosshair()
+
+        if self.volume_viewer is not None:
+            if hasattr(self.volume_viewer, 'set_projection_mode'):
+                self.volume_viewer.set_projection_mode(self.chk_orthogonal_projection.isChecked())
+            if hasattr(self.volume_viewer, 'set_interaction_quality'):
+                self.volume_viewer.set_interaction_quality(
+                    reduce_quality=self.chk_reduce_quality_during_op.isChecked(),
+                    best_quality=self.chk_best_quality.isChecked(),
+                )
+
+    def apply_3d_lighting_settings(self):
+        """应用光照参数到3D体渲染。"""
+        if self.volume_viewer is None or not hasattr(self.volume_viewer, 'set_light_settings'):
+            return
+
+        self.volume_viewer.set_light_settings(
+            light_position=self.light_pos_slider.value(),
+            light_intensity=self.light_intensity_slider.value(),
+            shadow_strength=self.shadow_strength_slider.value(),
+            shadow_alpha=self.shadow_alpha_slider.value(),
+            brightness=self.brightness_slider.value(),
+            spot=self.spot_slider.value(),
+            specular=self.specular_slider.value(),
+            scatter=self.scatter_slider.value(),
+        )
+
+    def apply_3d_focus_settings(self):
+        """应用焦距/景深相关参数到3D相机。"""
+        if self.volume_viewer is None or not hasattr(self.volume_viewer, 'set_focus_settings'):
+            return
+        self.volume_viewer.set_focus_settings(
+            auto_focus=self.chk_auto_focus.isChecked(),
+            focus_distance=self.focus_distance_slider.value(),
+            depth_of_field=self.depth_of_field_slider.value(),
+        )
+
+    def apply_current_3d_controls(self):
+        """在重建或切换数据后，重新应用当前3D控制面板状态。"""
+        if self.volume_viewer is None:
+            return
+        self.apply_scene_view_options()
 
     def preview_crop_effect(self):
         self.statusBar().showMessage("裁剪预览入口已启用", 2000)

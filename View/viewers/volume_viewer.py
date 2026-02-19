@@ -100,6 +100,7 @@ class VolumeViewer(QtWidgets.QFrame):
             renderer = vtk.vtkRenderer()
             renderer.AddVolume(volume)              # 添加体数据
             renderer.SetBackground(0.1, 0.1, 0.1)   # 背景颜色
+            default_sample_distance = max(spacing) * 1.0
         else:
             # 简化渲染模式（稳定版）
             # 使用稳健的百分位传输函数，避免硬阈值造成的层状伪影与错误表面
@@ -109,6 +110,7 @@ class VolumeViewer(QtWidgets.QFrame):
             volume_mapper.SetBlendModeToComposite()
             volume_mapper.SetAutoAdjustSampleDistances(True)
             volume_mapper.SetSampleDistance(max(spacing) * 0.7)
+            default_sample_distance = max(spacing) * 0.7
 
             # 稳健范围估计：去除极端值
             try:
@@ -183,6 +185,8 @@ class VolumeViewer(QtWidgets.QFrame):
             camera_range = camera.GetClippingRange()
             camera.SetClippingRange(camera_range[0] * 0.2, camera_range[1] * 1.8)
 
+        # 默认不覆写VTK内建光照，避免改变原有3D外观
+
         # ========= 9. 渲染窗口 =========
         renWin = self.vtkWidget.GetRenderWindow()
         renWin.AddRenderer(renderer)
@@ -195,6 +199,218 @@ class VolumeViewer(QtWidgets.QFrame):
         self.renderer = renderer
         self.mapper = volume_mapper if 'volume_mapper' in locals() else None
         self.property = volume_property if 'volume_property' in locals() else None
+        self.volume = volume if 'volume' in locals() else None
+        self.light = None
+        self.default_sample_distance = float(default_sample_distance)
+        self.current_render_mode = "默认"
+        self.default_color_func = None
+        self.default_opacity_func = None
+        if self.property is not None:
+            try:
+                self.default_color_func = vtk.vtkColorTransferFunction()
+                self.default_color_func.DeepCopy(self.property.GetRGBTransferFunction())
+                self.default_opacity_func = vtk.vtkPiecewiseFunction()
+                self.default_opacity_func.DeepCopy(self.property.GetScalarOpacity())
+            except Exception:
+                self.default_color_func = None
+                self.default_opacity_func = None
+
+    def _render(self):
+        if hasattr(self, 'renderer') and self.renderer is not None:
+            self.renderer.GetRenderWindow().Render()
+
+    def _safe_scalar_range(self):
+        if self.mapper is not None:
+            input_data = self.mapper.GetInput()
+            if input_data is not None:
+                rng = input_data.GetScalarRange()
+                if rng is not None and len(rng) == 2 and np.isfinite(rng[0]) and np.isfinite(rng[1]) and rng[1] > rng[0]:
+                    return float(rng[0]), float(rng[1])
+        return 0.0, 65535.0
+
+    def _build_default_transfer(self):
+        vmin, vmax = self._safe_scalar_range()
+        color_func = vtk.vtkColorTransferFunction()
+        color_func.AddRGBPoint(vmin, 0.0, 0.0, 0.0)
+        color_func.AddRGBPoint(vmin + (vmax - vmin) * 0.35, 0.35, 0.35, 0.35)
+        color_func.AddRGBPoint(vmin + (vmax - vmin) * 0.70, 0.70, 0.70, 0.70)
+        color_func.AddRGBPoint(vmax, 1.0, 1.0, 1.0)
+
+        opacity_func = vtk.vtkPiecewiseFunction()
+        opacity_func.AddPoint(vmin, 0.00)
+        opacity_func.AddPoint(vmin + (vmax - vmin) * 0.10, 0.00)
+        opacity_func.AddPoint(vmin + (vmax - vmin) * 0.35, 0.08)
+        opacity_func.AddPoint(vmin + (vmax - vmin) * 0.65, 0.35)
+        opacity_func.AddPoint(vmax, 0.85)
+        return color_func, opacity_func
+
+    def set_projection_mode(self, orthographic=False):
+        if not hasattr(self, 'renderer') or self.renderer is None:
+            return
+        camera = self.renderer.GetActiveCamera()
+        camera.SetParallelProjection(1 if orthographic else 0)
+        self._render()
+
+    def set_interaction_quality(self, reduce_quality=False, best_quality=True):
+        if self.mapper is None:
+            return
+        if reduce_quality:
+            self.mapper.SetAutoAdjustSampleDistances(True)
+            self.mapper.SetSampleDistance(self.default_sample_distance * 2.2)
+            self.mapper.SetImageSampleDistance(2.0)
+        elif best_quality:
+            self.mapper.SetAutoAdjustSampleDistances(False)
+            self.mapper.SetSampleDistance(max(self.default_sample_distance * 0.55, 0.05))
+            self.mapper.SetImageSampleDistance(1.0)
+        else:
+            self.mapper.SetAutoAdjustSampleDistances(True)
+            self.mapper.SetSampleDistance(self.default_sample_distance)
+            self.mapper.SetImageSampleDistance(1.25)
+        self._render()
+
+    def set_render_mode(self, mode):
+        if self.mapper is None or self.property is None:
+            return
+
+        mode = str(mode or "默认")
+        self.current_render_mode = mode
+        color_func, opacity_func = self._build_default_transfer()
+        vmin, vmax = self._safe_scalar_range()
+
+        if mode == "MIP":
+            self.mapper.SetBlendModeToMaximumIntensity()
+            self.property.ShadeOff()
+            opacity_func = vtk.vtkPiecewiseFunction()
+            opacity_func.AddPoint(vmin, 0.0)
+            opacity_func.AddPoint(vmax, 1.0)
+        elif mode == "MinIP":
+            self.mapper.SetBlendModeToMinimumIntensity()
+            self.property.ShadeOff()
+            opacity_func = vtk.vtkPiecewiseFunction()
+            opacity_func.AddPoint(vmin, 1.0)
+            opacity_func.AddPoint(vmax, 0.0)
+        elif mode in ("表面渲染", "ISO"):
+            self.mapper.SetBlendModeToComposite()
+            self.property.ShadeOn()
+            iso_value = vmin + 0.62 * (vmax - vmin)
+            opacity_func = vtk.vtkPiecewiseFunction()
+            opacity_func.AddPoint(vmin, 0.0)
+            opacity_func.AddPoint(iso_value - 0.06 * (vmax - vmin), 0.0)
+            opacity_func.AddPoint(iso_value, 0.55)
+            opacity_func.AddPoint(vmax, 0.92)
+        elif mode in ("默认", "体渲染"):
+            self.mapper.SetBlendModeToComposite()
+            self.property.ShadeOn()
+            if self.default_color_func is not None and self.default_opacity_func is not None:
+                color_func = vtk.vtkColorTransferFunction()
+                color_func.DeepCopy(self.default_color_func)
+                opacity_func = vtk.vtkPiecewiseFunction()
+                opacity_func.DeepCopy(self.default_opacity_func)
+        else:
+            self.mapper.SetBlendModeToComposite()
+            self.property.ShadeOn()
+
+        self.property.SetColor(color_func)
+        self.property.SetScalarOpacity(opacity_func)
+        self._render()
+
+    def set_light_settings(self, light_position=50, light_intensity=60, shadow_strength=40,
+                           shadow_alpha=50, brightness=50, spot=30, specular=35, scatter=45):
+        if self.property is None or self.renderer is None:
+            return
+
+        if self.light is None:
+            self.light = vtk.vtkLight()
+            self.light.SetLightTypeToSceneLight()
+            self.light.SetPositional(True)
+            self.light.SetPosition(1.0, 1.0, 1.2)
+            self.light.SetFocalPoint(0.0, 0.0, 0.0)
+            self.light.SetConeAngle(45.0)
+            self.light.SetIntensity(0.8)
+            self.renderer.AddLight(self.light)
+
+        light_intensity_n = max(0.0, min(1.0, float(light_intensity) / 100.0))
+        brightness_n = max(0.0, min(1.0, float(brightness) / 100.0))
+        specular_n = max(0.0, min(1.0, float(specular) / 100.0))
+        scatter_n = max(0.0, min(1.0, float(scatter) / 100.0))
+        spot_n = max(0.0, min(1.0, float(spot) / 100.0))
+        shadow_strength_n = max(0.0, min(1.0, float(shadow_strength) / 100.0))
+        shadow_alpha_n = max(0.0, min(1.0, float(shadow_alpha) / 100.0))
+
+        ambient = 0.06 + 0.44 * scatter_n
+        diffuse = 0.10 + 0.80 * light_intensity_n
+        diffuse *= (0.4 + 0.8 * brightness_n)
+        diffuse = max(0.0, min(1.0, diffuse))
+
+        self.property.SetAmbient(ambient)
+        self.property.SetDiffuse(diffuse)
+        self.property.SetSpecular(specular_n)
+        self.property.SetSpecularPower(5.0 + 45.0 * spot_n)
+        self.property.SetScalarOpacityUnitDistance(0.2 + (1.0 - shadow_alpha_n) * 2.2)
+
+        if hasattr(self.renderer, 'SetUseShadows'):
+            self.renderer.SetUseShadows(shadow_strength_n > 0.05)
+
+        if self.light is not None:
+            angle = (float(light_position) / 100.0) * (2.0 * math.pi)
+            radius = 1.6
+            self.light.SetPosition(radius * math.cos(angle), radius * math.sin(angle), 1.2)
+            self.light.SetIntensity(0.15 + 1.35 * light_intensity_n)
+            self.light.SetConeAngle(15.0 + 60.0 * spot_n)
+
+        self._render()
+
+    def set_focus_settings(self, auto_focus=True, focus_distance=40, depth_of_field=30):
+        if self.renderer is None:
+            return
+        camera = self.renderer.GetActiveCamera()
+        if camera is None:
+            return
+
+        if auto_focus:
+            self.renderer.ResetCamera()
+
+        near, far = camera.GetClippingRange()
+        near = max(0.01, float(near))
+        far = max(near + 0.1, float(far))
+
+        if not auto_focus:
+            distance_target = near + (far - near) * max(0.0, min(1.0, float(focus_distance) / 100.0))
+            cam_pos = np.array(camera.GetPosition(), dtype=float)
+            focal = np.array(camera.GetFocalPoint(), dtype=float)
+            direction = focal - cam_pos
+            norm = float(np.linalg.norm(direction))
+            if norm > 1e-6:
+                new_focal = cam_pos + direction / norm * distance_target
+                camera.SetFocalPoint(float(new_focal[0]), float(new_focal[1]), float(new_focal[2]))
+
+        dof_n = max(0.0, min(1.0, float(depth_of_field) / 100.0))
+        if not camera.GetParallelProjection():
+            camera.SetViewAngle(12.0 + (1.0 - dof_n) * 36.0)
+
+        span = far - near
+        near_new = max(0.01, near + span * 0.10 * dof_n)
+        far_new = max(near_new + 0.1, far - span * 0.05 * dof_n)
+        camera.SetClippingRange(near_new, far_new)
+        self._render()
+
+    def save_screenshot(self, filepath):
+        if self.renderer is None or not filepath:
+            return False
+        try:
+            window = self.renderer.GetRenderWindow()
+            w2if = vtk.vtkWindowToImageFilter()
+            w2if.SetInput(window)
+            w2if.ReadFrontBufferOff()
+            w2if.Update()
+
+            writer = vtk.vtkPNGWriter()
+            writer.SetFileName(filepath)
+            writer.SetInputConnection(w2if.GetOutputPort())
+            writer.Write()
+            return True
+        except Exception:
+            return False
         
     def adjust_contrast(self, opacity_scale=1.0, contrast_scale=1.0):
         """
@@ -234,8 +450,7 @@ class VolumeViewer(QtWidgets.QFrame):
                     self.property.SetScalarOpacity(new_opacity_func)
                 
         # 强制更新渲染
-        if hasattr(self, 'renderer') and self.renderer:
-            self.renderer.GetRenderWindow().Render()
+        self._render()
 
     def set_background_color(self, rgb):
         """设置3D渲染背景颜色"""
@@ -244,7 +459,7 @@ class VolumeViewer(QtWidgets.QFrame):
         try:
             r, g, b = rgb
             self.renderer.SetBackground(float(r), float(g), float(b))
-            self.renderer.GetRenderWindow().Render()
+            self._render()
         except Exception:
             pass
 
