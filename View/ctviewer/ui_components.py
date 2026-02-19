@@ -1386,15 +1386,123 @@ class UIComponents:
         self.histogram_dragging_line = None
         self.histogram_data_range = (0, 65535)  # 数据范围
         self.histogram_temp_label = None  # 临时标签引用
+        self.histogram_log_y = True
+        self.histogram_bin_width = 4
+        self.histogram_mode = 'window'
+        self.histogram_pan_last_x = None
+        self.histogram_zoom_anchor_x = None
+        self.histogram_current_data = None
+        self.histogram_plot_range = None
         
         # 连接鼠标事件
         self.histogram_canvas.mpl_connect('button_press_event', self.on_histogram_mouse_press)
         self.histogram_canvas.mpl_connect('button_release_event', self.on_histogram_mouse_release)
         self.histogram_canvas.mpl_connect('motion_notify_event', self.on_histogram_mouse_move)
+        self.histogram_canvas.mpl_connect('scroll_event', self.on_histogram_scroll)
         
         self.histogram_canvas.draw()
         
         histogram_layout.addWidget(self.histogram_canvas, 1)  # 添加stretch factor让画布填充
+
+        # 高级直方图控制区（按 Dragonfly 风格）
+        histogram_ctrl_panel = QtWidgets.QWidget()
+        histogram_ctrl_layout = QtWidgets.QVBoxLayout(histogram_ctrl_panel)
+        histogram_ctrl_layout.setContentsMargins(2, 2, 2, 2)
+        histogram_ctrl_layout.setSpacing(4)
+
+        # 第一行：Log Y + 窗口阈值
+        top_row = QtWidgets.QHBoxLayout()
+        self.histogram_logy_checkbox = QtWidgets.QCheckBox("Log Y")
+        self.histogram_logy_checkbox.setChecked(True)
+        self.histogram_logy_checkbox.toggled.connect(self.on_histogram_log_toggled)
+        top_row.addWidget(self.histogram_logy_checkbox)
+        top_row.addStretch()
+        top_row.addWidget(QtWidgets.QLabel("Min:"))
+        self.histogram_window_min_edit = QtWidgets.QLineEdit("0")
+        self.histogram_window_min_edit.setFixedWidth(62)
+        self.histogram_window_min_edit.editingFinished.connect(self.on_histogram_window_edit_finished)
+        top_row.addWidget(self.histogram_window_min_edit)
+        top_row.addWidget(QtWidgets.QLabel("Max:"))
+        self.histogram_window_max_edit = QtWidgets.QLineEdit("0")
+        self.histogram_window_max_edit.setFixedWidth(62)
+        self.histogram_window_max_edit.editingFinished.connect(self.on_histogram_window_edit_finished)
+        top_row.addWidget(self.histogram_window_max_edit)
+        histogram_ctrl_layout.addLayout(top_row)
+
+        # 第二行：高级绘图范围控制
+        adv_group = QtWidgets.QGroupBox("Advanced plot controls")
+        adv_layout = QtWidgets.QVBoxLayout(adv_group)
+        adv_layout.setContentsMargins(6, 8, 6, 6)
+        adv_layout.setSpacing(4)
+
+        adv_range_row = QtWidgets.QHBoxLayout()
+        adv_range_row.addWidget(QtWidgets.QLabel("Min:"))
+        self.histogram_plot_min_edit = QtWidgets.QLineEdit("0")
+        self.histogram_plot_min_edit.setFixedWidth(62)
+        adv_range_row.addWidget(self.histogram_plot_min_edit)
+        adv_range_row.addSpacing(8)
+        adv_range_row.addWidget(QtWidgets.QLabel("Max:"))
+        self.histogram_plot_max_edit = QtWidgets.QLineEdit("0")
+        self.histogram_plot_max_edit.setFixedWidth(62)
+        adv_range_row.addWidget(self.histogram_plot_max_edit)
+        adv_layout.addLayout(adv_range_row)
+
+        adv_btn_row = QtWidgets.QHBoxLayout()
+        self.hist_mode_window_btn = QtWidgets.QToolButton()
+        self.hist_mode_window_btn.setText("窗")
+        self.hist_mode_window_btn.setCheckable(True)
+        self.hist_mode_window_btn.setChecked(True)
+        self.hist_mode_window_btn.clicked.connect(lambda: self.set_histogram_interaction_mode('window'))
+        adv_btn_row.addWidget(self.hist_mode_window_btn)
+
+        self.hist_mode_pan_btn = QtWidgets.QToolButton()
+        self.hist_mode_pan_btn.setText("拖")
+        self.hist_mode_pan_btn.setCheckable(True)
+        self.hist_mode_pan_btn.clicked.connect(lambda: self.set_histogram_interaction_mode('pan'))
+        adv_btn_row.addWidget(self.hist_mode_pan_btn)
+
+        self.hist_mode_zoom_btn = QtWidgets.QToolButton()
+        self.hist_mode_zoom_btn.setText("缩")
+        self.hist_mode_zoom_btn.setCheckable(True)
+        self.hist_mode_zoom_btn.clicked.connect(lambda: self.set_histogram_interaction_mode('zoom'))
+        adv_btn_row.addWidget(self.hist_mode_zoom_btn)
+        adv_btn_row.addStretch()
+
+        self.histogram_reset_btn = QtWidgets.QPushButton("Reset")
+        self.histogram_reset_btn.setFixedHeight(22)
+        self.histogram_reset_btn.clicked.connect(self.on_histogram_reset_clicked)
+        adv_btn_row.addWidget(self.histogram_reset_btn)
+
+        self.histogram_apply_btn = QtWidgets.QPushButton("Apply")
+        self.histogram_apply_btn.setFixedHeight(22)
+        self.histogram_apply_btn.clicked.connect(self.on_histogram_apply_clicked)
+        adv_btn_row.addWidget(self.histogram_apply_btn)
+        adv_layout.addLayout(adv_btn_row)
+        histogram_ctrl_layout.addWidget(adv_group)
+
+        # 第三行：bin width + home
+        bottom_row = QtWidgets.QHBoxLayout()
+        bottom_row.addWidget(QtWidgets.QLabel("bin width:"))
+        self.histogram_bin_width_spin = QtWidgets.QSpinBox()
+        self.histogram_bin_width_spin.setRange(1, 256)
+        self.histogram_bin_width_spin.setValue(4)
+        self.histogram_bin_width_spin.valueChanged.connect(self.on_histogram_bin_width_changed)
+        bottom_row.addWidget(self.histogram_bin_width_spin)
+        bottom_row.addStretch()
+        self.histogram_home_btn = QtWidgets.QToolButton()
+        self.histogram_home_btn.setText("↺")
+        self.histogram_home_btn.clicked.connect(self.on_histogram_home_clicked)
+        bottom_row.addWidget(self.histogram_home_btn)
+        histogram_ctrl_layout.addLayout(bottom_row)
+
+        mode_group = QtWidgets.QButtonGroup(self)
+        mode_group.setExclusive(True)
+        mode_group.addButton(self.hist_mode_window_btn)
+        mode_group.addButton(self.hist_mode_pan_btn)
+        mode_group.addButton(self.hist_mode_zoom_btn)
+        self.histogram_mode_group = mode_group
+
+        histogram_layout.addWidget(histogram_ctrl_panel)
 
         # 属性设置面板（界面复刻）
         property_panel = QtWidgets.QWidget()
@@ -1683,105 +1791,129 @@ class UIComponents:
         """
         if not hasattr(self, 'histogram_ax'):
             return
-        
+
         try:
-            # 如果传入 None，清除直方图并返回
             if data_array is None:
+                self.histogram_current_data = None
                 self.histogram_ax.clear()
                 self.histogram_ax.set_facecolor('#1f1f1f')
                 self.histogram_figure.patch.set_facecolor('#2f2f2f')
                 self.histogram_canvas.draw_idle()
                 return
 
+            self.histogram_current_data = data_array
             from matplotlib.colors import LinearSegmentedColormap
-            
-            # 清除之前的直方图
+
+            current_xlim = None
+            if self.histogram_plot_range is not None:
+                current_xlim = self.histogram_plot_range
+            elif hasattr(self.histogram_ax, 'get_xlim'):
+                current_xlim = self.histogram_ax.get_xlim()
+
             self.histogram_ax.clear()
-            
-            # 清除临时标签
             self.histogram_temp_label = None
-            
-            # 对于大数据集，使用采样以加快计算
-            if data_array.size > 1e7:  # 如果数据量大于1000万像素
-                # 随机采样10%的数据
+
+            if data_array.size > 1e7:
                 sample_size = int(data_array.size * 0.1)
                 flat_data = data_array.flatten()
                 sample_indices = np.random.choice(flat_data.size, sample_size, replace=False)
                 sampled_data = flat_data[sample_indices]
             else:
                 sampled_data = data_array.flatten()
-            
-            # 计算直方图（使用256个bins）
-            hist_values, bin_edges = np.histogram(sampled_data, bins=256)
-            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-            
-            # 保存数据范围
+
             data_min = float(sampled_data.min())
             data_max = float(sampled_data.max())
+            if data_max <= data_min:
+                data_max = data_min + 1.0
+
             self.histogram_data_range = (data_min, data_max)
-            
-            # VGStudio风格：使用灰度渐变填充
-            # 创建灰度渐变colormap - 从深灰到浅灰
+
+            bin_width = float(getattr(self, 'histogram_bin_width', 4))
+            if hasattr(self, 'histogram_bin_width_spin'):
+                bin_width = float(self.histogram_bin_width_spin.value())
+            self.histogram_bin_width = max(1.0, bin_width)
+
+            n_bins = int(np.clip(np.ceil((data_max - data_min) / self.histogram_bin_width), 32, 2048))
+            hist_values, bin_edges = np.histogram(sampled_data, bins=n_bins, range=(data_min, data_max))
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
             colors = [(0.15, 0.15, 0.15), (0.5, 0.5, 0.5), (0.85, 0.85, 0.85)]
-            n_bins = len(bin_centers)
-            cmap = LinearSegmentedColormap.from_list('grayscale', colors, N=n_bins)
-            
-            # 为每个bin生成对应的颜色
-            bar_colors = [cmap(i / n_bins) for i in range(n_bins)]
-            
-            # 一次性绘制所有柱状图（更高效）
+            cmap = LinearSegmentedColormap.from_list('grayscale', colors, N=len(bin_centers))
+            bar_colors = [cmap(i / max(1, len(bin_centers))) for i in range(len(bin_centers))]
+
             bar_width = bin_edges[1] - bin_edges[0]
-            self.histogram_ax.bar(bin_centers, hist_values, 
-                                 width=bar_width * 0.95,  # 稍微缩小避免重叠
-                                 color=bar_colors,
-                                 edgecolor='none')
-            
-            # 设置浅色背景
+            if self.histogram_log_y:
+                draw_values = np.maximum(hist_values, 1)
+                self.histogram_ax.set_yscale('log')
+                y_max = max(2.0, float(draw_values.max()) * 1.25)
+                self.histogram_ax.set_ylim(0.8, y_max)
+            else:
+                draw_values = hist_values
+                self.histogram_ax.set_yscale('linear')
+                y_max = max(1.0, float(hist_values.max()) * 1.1)
+                self.histogram_ax.set_ylim(0, y_max)
+
+            self.histogram_ax.bar(
+                bin_centers,
+                draw_values,
+                width=bar_width * 0.95,
+                color=bar_colors,
+                edgecolor='none'
+            )
+
             self.histogram_ax.set_facecolor('#1f1f1f')
             self.histogram_figure.patch.set_facecolor('#2f2f2f')
-            
-            # 隐藏所有坐标轴和刻度
             self.histogram_ax.set_xticks([])
             self.histogram_ax.set_yticks([])
             self.histogram_ax.spines['bottom'].set_visible(False)
             self.histogram_ax.spines['left'].set_visible(False)
             self.histogram_ax.spines['top'].set_visible(False)
             self.histogram_ax.spines['right'].set_visible(False)
-            
-            # 设置坐标轴范围
-            self.histogram_ax.set_xlim(data_min, data_max)
-            y_max = hist_values.max() * 1.1
-            self.histogram_ax.set_ylim(0, y_max)
-            
-            # 保存直方图数据用于查询
+
+            plot_min, plot_max = data_min, data_max
+            if current_xlim is not None:
+                try:
+                    pmin = float(current_xlim[0])
+                    pmax = float(current_xlim[1])
+                    if pmax > pmin:
+                        plot_min = max(data_min, pmin)
+                        plot_max = min(data_max, pmax)
+                except (TypeError, ValueError):
+                    pass
+            if plot_max <= plot_min:
+                plot_min, plot_max = data_min, data_max
+            self.histogram_ax.set_xlim(plot_min, plot_max)
+            self.histogram_plot_range = (plot_min, plot_max)
+
             self.histogram_bin_centers = bin_centers
             self.histogram_values = hist_values
-            
-            # 添加可拖动的垂直线（默认在25%和75%位置）
-            line_left_pos = data_min + (data_max - data_min) * 0.25
-            line_right_pos = data_min + (data_max - data_min) * 0.75
-            
-            # 左线使用蓝色，右线使用红色
+
+            line_left_pos = float(getattr(self, 'window_level', (data_min + data_max) * 0.5) - getattr(self, 'window_width', (data_max - data_min)) / 2.0)
+            line_right_pos = float(getattr(self, 'window_level', (data_min + data_max) * 0.5) + getattr(self, 'window_width', (data_max - data_min)) / 2.0)
+            line_left_pos = max(data_min, min(data_max, line_left_pos))
+            line_right_pos = max(data_min, min(data_max, line_right_pos))
+            if line_right_pos <= line_left_pos:
+                mid = 0.5 * (line_left_pos + line_right_pos)
+                half = max((data_max - data_min) * 0.005, 0.5)
+                line_left_pos = max(data_min, mid - half)
+                line_right_pos = min(data_max, mid + half)
+
             self.histogram_left_line = self.histogram_ax.axvline(
-                line_left_pos, color='blue', linewidth=2, linestyle='-', alpha=0.8
+                line_left_pos, color='blue', linewidth=2, linestyle='-', alpha=0.85
             )
             self.histogram_right_line = self.histogram_ax.axvline(
-                line_right_pos, color='red', linewidth=2, linestyle='-', alpha=0.8
+                line_right_pos, color='red', linewidth=2, linestyle='-', alpha=0.85
             )
-            
-            # 计算统计信息并更新到状态栏
+
             data_mean = float(sampled_data.mean())
             data_std = float(sampled_data.std())
-            
-            # 更新状态栏信息
             self._update_status_bar(data_min, data_max, data_mean, data_std)
-            
-            # 调整布局让图表填充满整个区域
+            self._update_histogram_control_values()
+
             self.histogram_figure.tight_layout(pad=0.5)
-            self.histogram_canvas.draw()
-            
+            self.histogram_canvas.draw_idle()
             print(f"直方图已更新: 数据范围 [{data_min:.0f}, {data_max:.0f}], 均值 {data_mean:.1f}")
-            
+
         except Exception as e:
             print(f"更新直方图时出错: {str(e)}")
             import traceback
@@ -1813,16 +1945,26 @@ class UIComponents:
         """处理直方图的鼠标按下事件"""
         if event.inaxes != self.histogram_ax or event.xdata is None:
             return
-        
-        # 检查是否点击在某条线附近（容差5个数据单位）
+
+        mode = getattr(self, 'histogram_mode', 'window')
+        if mode == 'pan':
+            self.histogram_dragging_line = 'pan'
+            self.histogram_pan_last_x = float(event.xdata)
+            return
+        if mode == 'zoom':
+            self.histogram_dragging_line = 'zoom'
+            self.histogram_zoom_anchor_x = float(event.xdata)
+            self.histogram_pan_last_x = float(event.xdata)
+            return
+
         tolerance = (self.histogram_data_range[1] - self.histogram_data_range[0]) * 0.02
-        
+
         if self.histogram_left_line:
             left_pos = self.histogram_left_line.get_xdata()[0]
             if abs(event.xdata - left_pos) < tolerance:
                 self.histogram_dragging_line = 'left'
                 return
-        
+
         if self.histogram_right_line:
             right_pos = self.histogram_right_line.get_xdata()[0]
             if abs(event.xdata - right_pos) < tolerance:
@@ -1831,8 +1973,13 @@ class UIComponents:
     
     def on_histogram_mouse_release(self, event):
         """处理直方图的鼠标释放事件"""
+        if self.histogram_dragging_line in ('left', 'right'):
+            self._apply_window_from_histogram_lines(update_views=True)
+
         if self.histogram_dragging_line:
             self.histogram_dragging_line = None
+            self.histogram_pan_last_x = None
+            self.histogram_zoom_anchor_x = None
             # 重绘以清除临时标签
             self._redraw_histogram_lines()
     
@@ -1840,8 +1987,73 @@ class UIComponents:
         """处理直方图的鼠标移动事件"""
         if event.inaxes != self.histogram_ax or event.xdata is None:
             return
-        
-        # 如果正在拖动线段
+
+        if self.histogram_dragging_line in ('pan', 'zoom'):
+            if self.histogram_pan_last_x is None:
+                self.histogram_pan_last_x = float(event.xdata)
+                return
+
+            last_x = float(self.histogram_pan_last_x)
+            curr_x = float(event.xdata)
+            self.histogram_pan_last_x = curr_x
+
+            x0, x1 = self.histogram_ax.get_xlim()
+            data_min, data_max = self.histogram_data_range
+
+            if self.histogram_dragging_line == 'pan':
+                delta = curr_x - last_x
+                new_min = x0 - delta
+                new_max = x1 - delta
+                view_width = x1 - x0
+                if new_min < data_min:
+                    new_min = data_min
+                    new_max = data_min + view_width
+                if new_max > data_max:
+                    new_max = data_max
+                    new_min = data_max - view_width
+                if new_max > new_min:
+                    self.histogram_ax.set_xlim(new_min, new_max)
+                    self.histogram_plot_range = (new_min, new_max)
+                    self._update_histogram_control_values()
+                    self.histogram_canvas.draw_idle()
+                return
+
+            if self.histogram_dragging_line == 'zoom':
+                anchor = self.histogram_zoom_anchor_x if self.histogram_zoom_anchor_x is not None else (x0 + x1) * 0.5
+                delta = curr_x - last_x
+                zoom_factor = 1.0 - (delta * 0.01)
+                zoom_factor = max(0.85, min(1.15, zoom_factor))
+
+                left_span = (anchor - x0) * zoom_factor
+                right_span = (x1 - anchor) * zoom_factor
+                new_min = anchor - left_span
+                new_max = anchor + right_span
+
+                min_width = max((data_max - data_min) * 0.005, 1.0)
+                if new_max - new_min < min_width:
+                    center = 0.5 * (new_min + new_max)
+                    new_min = center - min_width * 0.5
+                    new_max = center + min_width * 0.5
+
+                if new_min < data_min:
+                    shift = data_min - new_min
+                    new_min += shift
+                    new_max += shift
+                if new_max > data_max:
+                    shift = new_max - data_max
+                    new_min -= shift
+                    new_max -= shift
+
+                new_min = max(data_min, new_min)
+                new_max = min(data_max, new_max)
+                if new_max > new_min:
+                    self.histogram_ax.set_xlim(new_min, new_max)
+                    self.histogram_plot_range = (new_min, new_max)
+                    self._update_histogram_control_values()
+                    self.histogram_canvas.draw_idle()
+                return
+
+        # 如果正在拖动窗阈值线段
         if self.histogram_dragging_line:
             data_min, data_max = self.histogram_data_range
             new_pos = max(data_min, min(data_max, event.xdata))
@@ -1898,6 +2110,8 @@ class UIComponents:
                              alpha=0.9))
             
             # 使用blit加速重绘
+            self._apply_window_from_histogram_lines(update_views=True)
+            self._update_histogram_control_values()
             self.histogram_canvas.draw_idle()
     
     def _clear_histogram_temp_labels(self):
@@ -1915,6 +2129,199 @@ class UIComponents:
         # 清除所有临时标签
         self._clear_histogram_temp_labels()
         self.histogram_canvas.draw()
+
+    def set_histogram_interaction_mode(self, mode):
+        """设置直方图交互模式：window / pan / zoom"""
+        self.histogram_mode = mode
+        if hasattr(self, 'hist_mode_window_btn'):
+            self.hist_mode_window_btn.setChecked(mode == 'window')
+        if hasattr(self, 'hist_mode_pan_btn'):
+            self.hist_mode_pan_btn.setChecked(mode == 'pan')
+        if hasattr(self, 'hist_mode_zoom_btn'):
+            self.hist_mode_zoom_btn.setChecked(mode == 'zoom')
+
+    def on_histogram_log_toggled(self, checked):
+        """切换Log Y显示"""
+        self.histogram_log_y = bool(checked)
+        if self.histogram_current_data is not None:
+            self.update_histogram(self.histogram_current_data)
+
+    def on_histogram_bin_width_changed(self, value):
+        """修改直方图bin宽"""
+        self.histogram_bin_width = max(1, int(value))
+        if self.histogram_current_data is not None:
+            self.update_histogram(self.histogram_current_data)
+
+    def on_histogram_window_edit_finished(self):
+        """从输入框应用窗阈值线位置"""
+        if not self.histogram_left_line or not self.histogram_right_line:
+            return
+        try:
+            left_val = float(self.histogram_window_min_edit.text())
+            right_val = float(self.histogram_window_max_edit.text())
+        except (TypeError, ValueError):
+            self._update_histogram_control_values()
+            return
+
+        data_min, data_max = self.histogram_data_range
+        left_val = max(data_min, min(data_max, left_val))
+        right_val = max(data_min, min(data_max, right_val))
+        if right_val <= left_val:
+            right_val = min(data_max, left_val + max((data_max - data_min) * 0.002, 1.0))
+
+        self.histogram_left_line.set_xdata([left_val, left_val])
+        self.histogram_right_line.set_xdata([right_val, right_val])
+        self._apply_window_from_histogram_lines(update_views=True)
+        self._update_histogram_control_values()
+        self.histogram_canvas.draw_idle()
+
+    def on_histogram_apply_clicked(self):
+        """应用高级绘图范围输入"""
+        if not hasattr(self, 'histogram_plot_min_edit'):
+            return
+        try:
+            plot_min = float(self.histogram_plot_min_edit.text())
+            plot_max = float(self.histogram_plot_max_edit.text())
+        except (TypeError, ValueError):
+            self._update_histogram_control_values()
+            return
+
+        self._set_histogram_plot_range(plot_min, plot_max)
+        self.histogram_canvas.draw_idle()
+
+    def on_histogram_reset_clicked(self):
+        """重置高级绘图范围并回到窗口模式"""
+        data_min, data_max = self.histogram_data_range
+        self._set_histogram_plot_range(data_min, data_max)
+        self.set_histogram_interaction_mode('window')
+        self._sync_histogram_lines_to_window_level()
+        self.histogram_canvas.draw_idle()
+
+    def on_histogram_home_clicked(self):
+        """直方图Home按钮：复位显示范围"""
+        data_min, data_max = self.histogram_data_range
+        self._set_histogram_plot_range(data_min, data_max)
+        self.histogram_canvas.draw_idle()
+
+    def on_histogram_scroll(self, event):
+        """滚轮缩放直方图X轴范围"""
+        if event.inaxes != self.histogram_ax or event.xdata is None:
+            return
+
+        x0, x1 = self.histogram_ax.get_xlim()
+        data_min, data_max = self.histogram_data_range
+        center = float(event.xdata)
+        factor = 0.9 if event.step > 0 else 1.1
+
+        left_span = (center - x0) * factor
+        right_span = (x1 - center) * factor
+        new_min = center - left_span
+        new_max = center + right_span
+
+        min_width = max((data_max - data_min) * 0.005, 1.0)
+        if new_max - new_min < min_width:
+            half = min_width * 0.5
+            new_min = center - half
+            new_max = center + half
+
+        if new_min < data_min:
+            shift = data_min - new_min
+            new_min += shift
+            new_max += shift
+        if new_max > data_max:
+            shift = new_max - data_max
+            new_min -= shift
+            new_max -= shift
+
+        new_min = max(data_min, new_min)
+        new_max = min(data_max, new_max)
+        if new_max > new_min:
+            self._set_histogram_plot_range(new_min, new_max)
+            self.histogram_canvas.draw_idle()
+
+    def _set_histogram_plot_range(self, plot_min, plot_max):
+        """设置直方图X轴显示范围"""
+        data_min, data_max = self.histogram_data_range
+        plot_min = max(data_min, float(plot_min))
+        plot_max = min(data_max, float(plot_max))
+        if plot_max <= plot_min:
+            return
+        self.histogram_ax.set_xlim(plot_min, plot_max)
+        self.histogram_plot_range = (plot_min, plot_max)
+        self._update_histogram_control_values()
+
+    def _apply_window_from_histogram_lines(self, update_views=True):
+        """根据直方图左右线反算窗宽窗位并同步到滑条"""
+        if not self.histogram_left_line or not self.histogram_right_line:
+            return
+        if not hasattr(self, 'ww_slider') or not hasattr(self, 'wl_slider'):
+            return
+
+        left_val = float(self.histogram_left_line.get_xdata()[0])
+        right_val = float(self.histogram_right_line.get_xdata()[0])
+        if right_val <= left_val:
+            return
+
+        width_val = right_val - left_val
+        level_val = (right_val + left_val) * 0.5
+
+        ww_min, ww_max = self.ww_slider.minimum(), self.ww_slider.maximum()
+        wl_min, wl_max = self.wl_slider.minimum(), self.wl_slider.maximum()
+        width_int = int(round(max(ww_min, min(ww_max, width_val))))
+        level_int = int(round(max(wl_min, min(wl_max, level_val))))
+
+        self._syncing_histogram_window = True
+        try:
+            self.ww_slider.blockSignals(True)
+            self.wl_slider.blockSignals(True)
+            self.ww_slider.setValue(width_int)
+            self.wl_slider.setValue(level_int)
+        finally:
+            self.ww_slider.blockSignals(False)
+            self.wl_slider.blockSignals(False)
+            self._syncing_histogram_window = False
+
+        self.window_width = width_int
+        self.window_level = level_int
+        if hasattr(self, 'ww_value'):
+            self.ww_value.setText(str(int(self.window_width)))
+        if hasattr(self, 'wl_value'):
+            self.wl_value.setText(str(int(self.window_level)))
+        if hasattr(self, 'prop_window_label'):
+            self.prop_window_label.setText(f"W: {int(self.window_width)}, L: {int(self.window_level)}")
+        if update_views and hasattr(self, 'update_all_views'):
+            self.update_all_views()
+
+    def _sync_histogram_lines_to_window_level(self):
+        """根据当前窗宽窗位更新直方图左右线位置"""
+        if not self.histogram_left_line or not self.histogram_right_line:
+            return
+
+        data_min, data_max = self.histogram_data_range
+        left_val = float(self.window_level - self.window_width / 2.0)
+        right_val = float(self.window_level + self.window_width / 2.0)
+        left_val = max(data_min, min(data_max, left_val))
+        right_val = max(data_min, min(data_max, right_val))
+        if right_val <= left_val:
+            right_val = min(data_max, left_val + max((data_max - data_min) * 0.002, 1.0))
+
+        self.histogram_left_line.set_xdata([left_val, left_val])
+        self.histogram_right_line.set_xdata([right_val, right_val])
+        self._update_histogram_control_values()
+
+    def _update_histogram_control_values(self):
+        """刷新直方图控制区输入框"""
+        if self.histogram_left_line and hasattr(self, 'histogram_window_min_edit'):
+            left_val = float(self.histogram_left_line.get_xdata()[0])
+            self.histogram_window_min_edit.setText(f"{left_val:.2f}")
+        if self.histogram_right_line and hasattr(self, 'histogram_window_max_edit'):
+            right_val = float(self.histogram_right_line.get_xdata()[0])
+            self.histogram_window_max_edit.setText(f"{right_val:.2f}")
+
+        if hasattr(self, 'histogram_plot_min_edit') and hasattr(self.histogram_ax, 'get_xlim'):
+            x0, x1 = self.histogram_ax.get_xlim()
+            self.histogram_plot_min_edit.setText(f"{x0:.2f}")
+            self.histogram_plot_max_edit.setText(f"{x1:.2f}")
     
     def _update_status_bar(self, data_min, data_max, data_mean, data_std):
         """

@@ -14,6 +14,8 @@ class WindowLevelControl:
         """窗宽窗位改变时的处理"""
         if self.raw_array is None:
             return
+        if getattr(self, '_syncing_histogram_window', False):
+            return
         
         self.window_width = self.ww_slider.value()
         self.window_level = self.wl_slider.value()
@@ -22,6 +24,11 @@ class WindowLevelControl:
 
         if hasattr(self, 'prop_window_label'):
             self.prop_window_label.setText(f"W: {int(self.window_width)}, L: {int(self.window_level)}")
+
+        if hasattr(self, '_sync_histogram_lines_to_window_level'):
+            self._sync_histogram_lines_to_window_level()
+            if hasattr(self, 'histogram_canvas'):
+                self.histogram_canvas.draw_idle()
         
         # 更新所有视图
         self.update_all_views()
@@ -44,6 +51,11 @@ class WindowLevelControl:
         
         self.ww_slider.setValue(self.window_width)
         self.wl_slider.setValue(self.window_level)
+
+        if hasattr(self, '_sync_histogram_lines_to_window_level'):
+            self._sync_histogram_lines_to_window_level()
+            if hasattr(self, 'histogram_canvas'):
+                self.histogram_canvas.draw_idle()
     
     def apply_window_level_to_slice(self, slice_array):
         """将窗宽窗位应用到单个切片（内存高效）"""
