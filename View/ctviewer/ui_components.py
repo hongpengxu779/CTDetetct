@@ -272,7 +272,7 @@ class UIComponents:
         self.setStyleSheet(stylesheet)
 
     def create_top_toolbars(self):
-        """创建顶部双排工具条（仿工业影像软件布局）"""
+        """创建顶部紧凑工具条（单行优先，避免挤压主视图区）"""
         style = self.style()
 
         # 第一排：基础文件操作
@@ -326,12 +326,11 @@ class UIComponents:
         segment_action.triggered.connect(self.run_unet_segmentation)
         primary_toolbar.addAction(segment_action)
 
-        # 第二排：视图/测量快捷
+        # 视图/测量快捷（与第一组同排）
         secondary_toolbar = QtWidgets.QToolBar("显示工具栏", self)
         secondary_toolbar.setMovable(False)
         secondary_toolbar.setIconSize(QtCore.QSize(16, 16))
         secondary_toolbar.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
-        self.addToolBarBreak(QtCore.Qt.TopToolBarArea)
         self.addToolBar(QtCore.Qt.TopToolBarArea, secondary_toolbar)
 
         pan_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowLeft), "平移", self)
@@ -373,12 +372,11 @@ class UIComponents:
         minip_action.triggered.connect(lambda: self.create_minip_projection(axis=0, use_roi=True))
         secondary_toolbar.addAction(minip_action)
 
-        # 第三排：开关与步进（贴近专业软件）
+        # 开关与步进（与前两组同排）
         tertiary_toolbar = QtWidgets.QToolBar("交互工具栏", self)
         tertiary_toolbar.setMovable(False)
         tertiary_toolbar.setIconSize(QtCore.QSize(16, 16))
         tertiary_toolbar.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
-        self.addToolBarBreak(QtCore.Qt.TopToolBarArea)
         self.addToolBar(QtCore.Qt.TopToolBarArea, tertiary_toolbar)
 
         link_views_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_CommandLink), "联动", self)
@@ -597,11 +595,13 @@ class UIComponents:
         """初始化界面布局"""
         # 创建主水平分割器：左侧工具栏 | 中间视图 | 右侧面板
         main_splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        main_splitter.setChildrenCollapsible(False)
+        main_splitter.setHandleWidth(2)
         
         # 创建左侧工具栏（垂直布局）
         self.left_toolbar = QtWidgets.QWidget()
-        self.left_toolbar.setMaximumWidth(250)
-        self.left_toolbar.setMinimumWidth(210)
+        self.left_toolbar.setMaximumWidth(230)
+        self.left_toolbar.setMinimumWidth(190)
         self.left_toolbar.setStyleSheet("""
             QWidget {
                 background-color: #303030;
@@ -1067,12 +1067,12 @@ class UIComponents:
         
         # 创建右侧面板（垂直分割成上下两部分）
         self.right_panel = QtWidgets.QWidget()
-        self.right_panel.setMaximumWidth(340)
-        self.right_panel.setMinimumWidth(290)
+        self.right_panel.setMaximumWidth(300)
+        self.right_panel.setMinimumWidth(260)
         self.right_panel.setStyleSheet("background-color: #303030; border-left: 1px solid #1f1f1f;")
         right_panel_layout = QtWidgets.QVBoxLayout(self.right_panel)
         right_panel_layout.setContentsMargins(8, 8, 8, 8)
-        right_panel_layout.setSpacing(10)  # 增加两个面板之间的间距
+        right_panel_layout.setSpacing(8)
         
         # 数据列表面板（上半部分） - 浅色风格
         data_list_panel = QtWidgets.QWidget()
@@ -1453,12 +1453,12 @@ class UIComponents:
         
         # 设置分割器的初始尺寸比例（左侧固定，中间自适应，右侧固定）
         main_splitter.setStretchFactor(0, 0)  # 左侧工具栏 - 不拉伸
-        main_splitter.setStretchFactor(1, 3)  # 中间视图区域 - 主要区域，拉伸因子为3
+        main_splitter.setStretchFactor(1, 5)  # 中间视图区域 - 主要区域
         main_splitter.setStretchFactor(2, 0)  # 右侧面板 - 不拉伸
         
         # 设置初始分割比例
         total_width = 1600  # 假设的总宽度
-        main_splitter.setSizes([230, 1030, 320])  # 左侧:中间:右侧 的比例
+        main_splitter.setSizes([200, 1120, 280])  # 左侧:中间:右侧 的比例
         
         # 使用QMainWindow的setCentralWidget方法设置中心部件
         self.setCentralWidget(main_splitter)
