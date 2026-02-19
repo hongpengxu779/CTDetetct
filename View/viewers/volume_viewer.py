@@ -101,117 +101,62 @@ class VolumeViewer(QtWidgets.QFrame):
             renderer.AddVolume(volume)              # 添加体数据
             renderer.SetBackground(0.1, 0.1, 0.1)   # 背景颜色
         else:
-            # 简化渲染模式 - 使用标准体渲染但简化传输函数
-            # 这样可以保留3D结构同时提高清晰度
-            
-            # 使用GPU光线投射映射器，优化CT数据的体绘制
+            # 简化渲染模式（稳定版）
+            # 使用稳健的百分位传输函数，避免硬阈值造成的层状伪影与错误表面
+
             volume_mapper = vtk.vtkGPUVolumeRayCastMapper()
-            volume_mapper.SetInputConnection(importer.GetOutputPort())  # 输入数据
-            volume_mapper.SetBlendModeToComposite()  # 使用复合模式进行体渲染
-            volume_mapper.SetSampleDistance(0.5)     # 设置较小的采样距离，提高质量
-            volume_mapper.SetAutoAdjustSampleDistances(True)  # 自动调整采样距离
-            
-            # 动态确定数据范围，避免硬编码阈值
-            scalar_range = [0, 65535]  # 默认范围
-            
-            # 尝试从数据中确定实际范围并计算合适的阈值
+            volume_mapper.SetInputConnection(importer.GetOutputPort())
+            volume_mapper.SetBlendModeToComposite()
+            volume_mapper.SetAutoAdjustSampleDistances(True)
+            volume_mapper.SetSampleDistance(max(spacing) * 0.7)
+
+            # 稳健范围估计：去除极端值
             try:
-                if hasattr(volume_array, 'min') and hasattr(volume_array, 'max'):
-                    min_val = float(volume_array.min())
-                    max_val = float(volume_array.max())
-                    
-                    # 如果有足够的数据范围，则使用直方图分析确定更合适的阈值
-                    if max_val > min_val and volume_array.size > 1000:
-                        # 计算数据直方图
-                        try:
-                            flat_data = volume_array.flatten()
-                            hist, bins = np.histogram(flat_data, bins=100)
-                            
-                            # 使用累积分布确定合适的低阈值和高阈值
-                            # 去除最低的10%值（通常是噪声或背景）
-                            cumsum = np.cumsum(hist)
-                            total_pixels = cumsum[-1]
-                            
-                            # 找到10%和90%的像素值
-                            low_idx = np.where(cumsum >= total_pixels * 0.10)[0][0]
-                            high_idx = np.where(cumsum >= total_pixels * 0.90)[0][0]
-                            
-                            lower_threshold = bins[low_idx]
-                            upper_threshold = bins[high_idx]
-                            
-                            scalar_range = [lower_threshold, upper_threshold]
-                        except:
-                            # 如果直方图分析失败，则使用简单的百分比阈值
-                            lower_threshold = min_val + (max_val - min_val) * 0.10  # 低于10%的值视为背景
-                            upper_threshold = min_val + (max_val - min_val) * 0.90  # 保留90%的有效范围
-                            scalar_range = [lower_threshold, upper_threshold]
-                    else:
-                        # 简单的范围缩放
-                        scalar_range = [min_val, max_val]
+                flat_data = volume_array.reshape(-1).astype(np.float32)
+                p01 = float(np.percentile(flat_data, 1.0))
+                p99 = float(np.percentile(flat_data, 99.5))
+                data_min = float(flat_data.min())
+                data_max = float(flat_data.max())
+
+                if not np.isfinite(p01) or not np.isfinite(p99) or p99 <= p01:
+                    p01, p99 = data_min, data_max
+
+                # 对于低动态范围数据（如分割），退回全范围映射
+                if (p99 - p01) < 32:
+                    p01, p99 = data_min, data_max
+
+                print(f"3D稳定渲染范围: [{p01:.2f}, {p99:.2f}] (全范围 [{data_min:.2f}, {data_max:.2f}])")
             except Exception as e:
-                print(f"计算3D阈值时出错: {str(e)}")
-                # 如果失败则使用默认范围
-                scalar_range = [0, 65535]
-            
-            print(f"3D视图数据范围: {scalar_range}")
-            
-            # 分析数据直方图以获取更准确的阈值
-            try:
-                flat_data = volume_array.flatten()
-                
-                # 使用直方图分析确定更合理的阈值
-                hist, bins = np.histogram(flat_data, bins=200)
-                cumsum = np.cumsum(hist)
-                total_pixels = cumsum[-1]
-                
-                # 找到对应百分比的阈值点
-                # 使用更高的起始阈值，确保背景被剔除
-                low_idx = np.where(cumsum >= total_pixels * 0.50)[0][0]  # 忽略低于50%的值
-                threshold = bins[low_idx]
-                
-                print(f"CT数据直方图分析: 有效阈值 = {threshold}")
-            except Exception as e:
-                print(f"直方图分析失败: {e}")
-                # 如果直方图分析失败，使用简单的阈值
-                threshold = scalar_range[0] + (scalar_range[1] - scalar_range[0]) * 0.5
-            
-            # 创建专为CT数据优化的灰度颜色映射
+                print(f"3D范围估计失败: {e}")
+                p01, p99 = 0.0, 65535.0
+
+            # 灰度颜色映射（连续）
             color_func = vtk.vtkColorTransferFunction()
-            # 使用灰度模式 - 但增加中间色调以提高结构可见性
-            color_func.AddRGBPoint(scalar_range[0], 0.0, 0.0, 0.0)  # 背景为黑色
-            color_func.AddRGBPoint(threshold * 0.9, 0.2, 0.2, 0.2)  # 阈值附近的低值为深灰色
-            color_func.AddRGBPoint(threshold, 0.7, 0.7, 0.7)        # 阈值处为中灰色
-            color_func.AddRGBPoint(scalar_range[1], 1.0, 1.0, 1.0)  # 最高值为纯白
-            
-            # 创建更适合CT数据的不透明度映射
+            color_func.AddRGBPoint(p01, 0.0, 0.0, 0.0)
+            color_func.AddRGBPoint(p01 + (p99 - p01) * 0.35, 0.35, 0.35, 0.35)
+            color_func.AddRGBPoint(p01 + (p99 - p01) * 0.70, 0.70, 0.70, 0.70)
+            color_func.AddRGBPoint(p99, 1.0, 1.0, 1.0)
+
+            # 不透明度映射（平滑）
             opacity_func = vtk.vtkPiecewiseFunction()
-            # 使用陡峭的不透明度曲线，阈值处明显变化
-            opacity_func.AddPoint(scalar_range[0], 0.00)        # 低值完全透明(背景)
-            opacity_func.AddPoint(threshold * 0.95, 0.00)       # 阈值之下略微透明
-            opacity_func.AddPoint(threshold, 0.7)               # 阈值处突然变不透明
-            opacity_func.AddPoint(scalar_range[1], 1.0)         # 最高值完全不透明
-            
-            # 设置体渲染属性，优化CT数据显示
+            opacity_func.AddPoint(p01, 0.00)
+            opacity_func.AddPoint(p01 + (p99 - p01) * 0.10, 0.00)
+            opacity_func.AddPoint(p01 + (p99 - p01) * 0.35, 0.08)
+            opacity_func.AddPoint(p01 + (p99 - p01) * 0.65, 0.35)
+            opacity_func.AddPoint(p99, 0.85)
+
+            # 体渲染属性
             volume_property = vtk.vtkVolumeProperty()
-            volume_property.SetColor(color_func)              # 设置颜色映射
-            volume_property.SetScalarOpacity(opacity_func)    # 设置透明度映射
-            
-            # 优化光照设置以增强CT数据的细节
-            volume_property.ShadeOn()                 # 开启光照
-            volume_property.SetAmbient(0.2)          # 环境光较少
-            volume_property.SetDiffuse(0.9)          # 增强漫反射，提高结构细节
-            volume_property.SetSpecular(0.3)         # 适当高光，增加立体感
-            volume_property.SetSpecularPower(15)     # 高光强度和集中度
-            
-            # 线性插值提高质量
+            volume_property.SetColor(color_func)
+            volume_property.SetScalarOpacity(opacity_func)
             volume_property.SetInterpolationTypeToLinear()
+            volume_property.ShadeOn()
+            volume_property.SetAmbient(0.25)
+            volume_property.SetDiffuse(0.75)
+            volume_property.SetSpecular(0.15)
+            volume_property.SetSpecularPower(10)
             
-            # 启用梯度不透明度，让结构边缘更清晰
-            gradient_opacity = vtk.vtkPiecewiseFunction()
-            gradient_opacity.AddPoint(0,   0.0)    # 平坦区域（低梯度）更透明
-            gradient_opacity.AddPoint(10,  0.5)    # 中等梯度部分透明
-            gradient_opacity.AddPoint(20,  1.0)    # 边缘（高梯度）不透明
-            volume_property.SetGradientOpacity(gradient_opacity)
+            # 注意：禁用激进梯度不透明度，避免分层/环纹伪影
             
             # 创建体数据对象
             volume = vtk.vtkVolume()
@@ -220,29 +165,23 @@ class VolumeViewer(QtWidgets.QFrame):
             
             # 创建渲染器
             renderer = vtk.vtkRenderer()
-            renderer.AddVolume(volume)              # 添加体数据
-            renderer.SetBackground(0.1, 0.1, 0.2)   # 背景颜色偏蓝，增强对比度
-            
-            # 设置为CT数据优化的相机视角
-            renderer.ResetCamera()  # 首先重置相机以适应数据
+            renderer.AddVolume(volume)
+            renderer.SetBackground(0.1, 0.1, 0.2)
+            renderer.ResetCamera()
             
             camera = renderer.GetActiveCamera()
-            camera.Elevation(30)      # 较高的仰角，便于观察内部结构
-            camera.Azimuth(45)        # 45度方位角，提供立体感
-            camera.Zoom(1.3)          # 稍微放大
-            camera.Roll(0)            # 确保没有倾斜
-            
-            # 设置高质量渲染
+            camera.Elevation(20)
+            camera.Azimuth(35)
+            camera.Zoom(1.15)
+            camera.Roll(0)
+
             renWin = self.vtkWidget.GetRenderWindow()
-            renWin.SetMultiSamples(4)  # 抗锯齿
-            
-            # 启用高级渲染选项
-            renderer.SetUseFXAA(True)        # 抗锯齿
-            renderer.SetTwoSidedLighting(True)  # 双面光照
-            
-            # 设置CT数据专用的相机裁剪范围
+            renWin.SetMultiSamples(4)
+            renderer.SetUseFXAA(True)
+            renderer.SetTwoSidedLighting(True)
+
             camera_range = camera.GetClippingRange()
-            camera.SetClippingRange(camera_range[0] * 0.1, camera_range[1] * 2.0)  # 扩展裁剪范围
+            camera.SetClippingRange(camera_range[0] * 0.2, camera_range[1] * 1.8)
 
         # ========= 9. 渲染窗口 =========
         renWin = self.vtkWidget.GetRenderWindow()
