@@ -74,6 +74,13 @@ class SliceViewer(QtWidgets.QWidget):
         self.flip_horizontal = False
         self.flip_vertical = False
         self.rotation_angle = 0.0
+        self.move_dragging = False
+        self.move_rotating = False
+        self.move_last_mouse_pos = None
+        self.move_history = []
+        self.move_pending_dx = 0
+        self.move_pending_dy = 0
+        self.move_pending_angle = 0.0
         self._wl_drag_active = False
         self._wl_drag_start_pos = None
         self._wl_roi_selecting = False
@@ -498,6 +505,87 @@ class SliceViewer(QtWidgets.QWidget):
                     if event.type() == QtCore.QEvent.MouseButtonRelease and event.button() == QtCore.Qt.LeftButton:
                         self._wl_drag_active = False
                         self._wl_drag_start_pos = None
+                        self.view.viewport().setCursor(QtCore.Qt.ArrowCursor)
+                        return True
+
+                if getattr(self.parent_viewer, 'move_tool_enabled', False):
+                    if event.type() == QtCore.QEvent.MouseButtonPress and event.button() == QtCore.Qt.LeftButton:
+                        self._push_move_history_state()
+                        self.move_dragging = True
+                        self.move_last_mouse_pos = event.pos()
+                        self.move_pending_dx = 0
+                        self.move_pending_dy = 0
+                        self.view.viewport().setCursor(QtCore.Qt.ClosedHandCursor)
+                        return True
+
+                    if event.type() == QtCore.QEvent.MouseMove and self.move_dragging and self.move_last_mouse_pos is not None:
+                        delta = event.pos() - self.move_last_mouse_pos
+                        dynamic_refresh = True
+                        if hasattr(self.parent_viewer, 'chk_dynamic_refresh'):
+                            dynamic_refresh = self.parent_viewer.chk_dynamic_refresh.isChecked()
+
+                        if dynamic_refresh:
+                            h_bar = self.view.horizontalScrollBar()
+                            v_bar = self.view.verticalScrollBar()
+                            h_bar.setValue(h_bar.value() - delta.x())
+                            v_bar.setValue(v_bar.value() - delta.y())
+                        else:
+                            self.move_pending_dx += delta.x()
+                            self.move_pending_dy += delta.y()
+
+                        self.move_last_mouse_pos = event.pos()
+                        return True
+
+                    if event.type() == QtCore.QEvent.MouseButtonRelease and event.button() == QtCore.Qt.LeftButton:
+                        self.move_dragging = False
+                        dynamic_refresh = True
+                        if hasattr(self.parent_viewer, 'chk_dynamic_refresh'):
+                            dynamic_refresh = self.parent_viewer.chk_dynamic_refresh.isChecked()
+                        if not dynamic_refresh and (self.move_pending_dx != 0 or self.move_pending_dy != 0):
+                            h_bar = self.view.horizontalScrollBar()
+                            v_bar = self.view.verticalScrollBar()
+                            h_bar.setValue(h_bar.value() - self.move_pending_dx)
+                            v_bar.setValue(v_bar.value() - self.move_pending_dy)
+                            self.move_pending_dx = 0
+                            self.move_pending_dy = 0
+                        self.move_last_mouse_pos = None
+                        self.view.viewport().setCursor(QtCore.Qt.ArrowCursor)
+                        return True
+
+                    if event.type() == QtCore.QEvent.MouseButtonPress and event.button() == QtCore.Qt.RightButton:
+                        self._push_move_history_state()
+                        self.move_rotating = True
+                        self.move_last_mouse_pos = event.pos()
+                        self.move_pending_angle = 0.0
+                        self.view.viewport().setCursor(QtCore.Qt.SizeHorCursor)
+                        return True
+
+                    if event.type() == QtCore.QEvent.MouseMove and self.move_rotating and self.move_last_mouse_pos is not None:
+                        delta = event.pos() - self.move_last_mouse_pos
+                        delta_angle = float(delta.x()) * 0.4
+                        dynamic_refresh = True
+                        if hasattr(self.parent_viewer, 'chk_dynamic_refresh'):
+                            dynamic_refresh = self.parent_viewer.chk_dynamic_refresh.isChecked()
+
+                        if dynamic_refresh:
+                            self.rotation_angle = (self.rotation_angle + delta_angle) % 360.0
+                            self._refresh_current_slice()
+                        else:
+                            self.move_pending_angle += delta_angle
+
+                        self.move_last_mouse_pos = event.pos()
+                        return True
+
+                    if event.type() == QtCore.QEvent.MouseButtonRelease and event.button() == QtCore.Qt.RightButton:
+                        self.move_rotating = False
+                        dynamic_refresh = True
+                        if hasattr(self.parent_viewer, 'chk_dynamic_refresh'):
+                            dynamic_refresh = self.parent_viewer.chk_dynamic_refresh.isChecked()
+                        if not dynamic_refresh and abs(self.move_pending_angle) > 1e-6:
+                            self.rotation_angle = (self.rotation_angle + self.move_pending_angle) % 360.0
+                            self.move_pending_angle = 0.0
+                            self._refresh_current_slice()
+                        self.move_last_mouse_pos = None
                         self.view.viewport().setCursor(QtCore.Qt.ArrowCursor)
                         return True
 
@@ -2627,6 +2715,35 @@ class SliceViewer(QtWidgets.QWidget):
         # array_to_qpixmap会自动进行归一化，无需传递窗宽窗位参数
         pixmap = array_to_qpixmap(arr)
         return pixmap
+
+    def _push_move_history_state(self):
+        """保存Move变换历史"""
+        state = {
+            'rotation_angle': float(self.rotation_angle),
+            'h_scroll': self.view.horizontalScrollBar().value(),
+            'v_scroll': self.view.verticalScrollBar().value()
+        }
+        self.move_history.append(state)
+        if len(self.move_history) > 100:
+            self.move_history.pop(0)
+
+    def undo_move_transform(self):
+        """撤销上一步Move变换"""
+        if not self.move_history:
+            return
+
+        state = self.move_history.pop()
+        self.rotation_angle = float(state.get('rotation_angle', self.rotation_angle))
+        self._refresh_current_slice()
+
+        h_scroll = int(state.get('h_scroll', self.view.horizontalScrollBar().value()))
+        v_scroll = int(state.get('v_scroll', self.view.verticalScrollBar().value()))
+
+        def _restore_scrollbar():
+            self.view.horizontalScrollBar().setValue(h_scroll)
+            self.view.verticalScrollBar().setValue(v_scroll)
+
+        QtCore.QTimer.singleShot(0, _restore_scrollbar)
 
     def _handle_window_level_roi_press(self, event):
         """窗口级别ROI模式：鼠标按下"""

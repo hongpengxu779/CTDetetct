@@ -796,6 +796,22 @@ class UIComponents:
         # 移动区
         move_group = QtWidgets.QGroupBox("移动区")
         move_layout = QtWidgets.QVBoxLayout(move_group)
+        move_btn_row = QtWidgets.QHBoxLayout()
+        self.move_tool_btn = QtWidgets.QToolButton()
+        self.move_tool_btn.setText("Move")
+        self.move_tool_btn.setCheckable(True)
+        self.move_tool_btn.setToolTip("左键平移，右键旋转")
+        self.move_tool_btn.toggled.connect(self.toggle_move_tool)
+        move_btn_row.addWidget(self.move_tool_btn)
+
+        self.move_undo_btn = QtWidgets.QToolButton()
+        self.move_undo_btn.setText("撤销")
+        self.move_undo_btn.setToolTip("撤销上一步平移/旋转")
+        self.move_undo_btn.clicked.connect(self.undo_move_tool)
+        move_btn_row.addWidget(self.move_undo_btn)
+        move_btn_row.addStretch()
+        move_layout.addLayout(move_btn_row)
+
         self.chk_dynamic_refresh = QtWidgets.QCheckBox("动态刷新")
         self.chk_dynamic_refresh.setChecked(True)
         self.chk_interactive_probe = QtWidgets.QCheckBox("探头定位")
@@ -1727,6 +1743,7 @@ class UIComponents:
         self.window_level = 32767
         self.window_level_drag_mode = False
         self.window_level_roi_mode = False
+        self.move_tool_enabled = False
     
     def create_placeholder_views(self):
         """创建占位符视图"""
@@ -2368,6 +2385,30 @@ class UIComponents:
                 self.statusBar().showMessage("区域自动窗调平：在任意2D视图左键拖动框选ROI，松开后自动应用")
             else:
                 self.statusBar().showMessage("区域自动窗调平已关闭", 2000)
+
+    def toggle_move_tool(self, checked):
+        """切换Move工具（2D视图左键平移、右键旋转）"""
+        self.move_tool_enabled = bool(checked)
+        if checked:
+            if hasattr(self, 'statusBar'):
+                self.statusBar().showMessage("Move工具已启用：左键平移，右键旋转")
+        else:
+            if hasattr(self, 'statusBar'):
+                self.statusBar().showMessage("Move工具已关闭", 2000)
+
+    def undo_move_tool(self):
+        """撤销当前活动视图的Move变换"""
+        viewer_map = {
+            'axial': getattr(self, 'axial_viewer', None),
+            'sagittal': getattr(self, 'sag_viewer', None),
+            'coronal': getattr(self, 'cor_viewer', None)
+        }
+        active = getattr(self, 'active_view', 'axial')
+        viewer = viewer_map.get(active)
+        if viewer is not None and hasattr(viewer, 'undo_move_transform'):
+            viewer.undo_move_transform()
+            if hasattr(self, 'statusBar'):
+                self.statusBar().showMessage(f"已撤销 {active} 视图上一步Move操作", 2000)
     
     def _update_status_bar(self, data_min, data_max, data_mean, data_std):
         """

@@ -235,10 +235,16 @@ class SimpleZoomViewer(QtWidgets.QWidget):
         self.scale_factor = 1.0
         self.offset_x = 0
         self.offset_y = 0
+        self.rotation_angle = 0.0
         
         # 用于拖拽平移
         self.last_mouse_pos = None
         self.is_dragging = False
+        self.is_rotating = False
+        self.move_history = []
+        self._pending_dx = 0
+        self._pending_dy = 0
+        self._pending_da = 0.0
         
         # 创建界面
         self.init_ui()
@@ -249,23 +255,28 @@ class SimpleZoomViewer(QtWidgets.QWidget):
     def init_ui(self):
         """初始化界面"""
         layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
         
         # 图像显示标签
         self.image_label = QtWidgets.QLabel()
         self.image_label.setAlignment(QtCore.Qt.AlignCenter)
         self.image_label.setMouseTracking(True)
         self.image_label.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        self.image_label.setStyleSheet("QLabel { background-color: #1c1c1c; }")
         
         # 为标签安装事件过滤器
         self.image_label.installEventFilter(self)
         
         # 滚动区域
-        scroll = QtWidgets.QScrollArea()
-        scroll.setWidget(self.image_label)
-        scroll.setWidgetResizable(False)
-        scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-        scroll.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
-        layout.addWidget(scroll)
+        self.scroll_area = QtWidgets.QScrollArea()
+        self.scroll_area.setWidget(self.image_label)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setAlignment(QtCore.Qt.AlignCenter)
+        self.scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        self.scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        self.scroll_area.setStyleSheet("QScrollArea { background-color: #202020; border: 1px solid #3a3a3a; }")
+        layout.addWidget(self.scroll_area)
         
         # 控制面板
         control_panel = QtWidgets.QWidget()
@@ -297,6 +308,25 @@ class SimpleZoomViewer(QtWidgets.QWidget):
         reset_btn = QtWidgets.QPushButton("1:1")
         reset_btn.clicked.connect(self.reset_view)
         control_layout.addWidget(reset_btn)
+
+        control_layout.addSpacing(12)
+
+        self.move_tool_btn = QtWidgets.QToolButton()
+        self.move_tool_btn.setText("Move")
+        self.move_tool_btn.setCheckable(True)
+        self.move_tool_btn.setChecked(True)
+        self.move_tool_btn.setToolTip("左键拖动平移，右键拖动旋转")
+        control_layout.addWidget(self.move_tool_btn)
+
+        self.move_undo_btn = QtWidgets.QToolButton()
+        self.move_undo_btn.setText("撤销")
+        self.move_undo_btn.setToolTip("撤销上一步平移/旋转")
+        self.move_undo_btn.clicked.connect(self.undo_move)
+        control_layout.addWidget(self.move_undo_btn)
+
+        self.move_dynamic_refresh = QtWidgets.QCheckBox("Dynamic refresh")
+        self.move_dynamic_refresh.setChecked(True)
+        control_layout.addWidget(self.move_dynamic_refresh)
         
         control_layout.addStretch()
         
@@ -309,15 +339,38 @@ class SimpleZoomViewer(QtWidgets.QWidget):
         """事件过滤器，处理鼠标事件"""
         if obj == self.image_label:
             if event.type() == QtCore.QEvent.MouseButtonPress:
-                if event.button() == QtCore.Qt.LeftButton:
+                if event.button() == QtCore.Qt.LeftButton and self.move_tool_btn.isChecked():
+                    self._push_history_state()
                     self.is_dragging = True
                     self.last_mouse_pos = event.pos()
                     self.image_label.setCursor(QtCore.Qt.ClosedHandCursor)
+                    return True
+                if event.button() == QtCore.Qt.RightButton and self.move_tool_btn.isChecked():
+                    self._push_history_state()
+                    self.is_rotating = True
+                    self.last_mouse_pos = event.pos()
+                    self._pending_da = 0.0
+                    self.image_label.setCursor(QtCore.Qt.SizeHorCursor)
                     return True
             
             elif event.type() == QtCore.QEvent.MouseButtonRelease:
                 if event.button() == QtCore.Qt.LeftButton:
                     self.is_dragging = False
+                    if not self.move_dynamic_refresh.isChecked() and (self._pending_dx != 0 or self._pending_dy != 0):
+                        self.offset_x += self._pending_dx
+                        self.offset_y += self._pending_dy
+                        self._pending_dx = 0
+                        self._pending_dy = 0
+                        self.update_display()
+                    self.last_mouse_pos = None
+                    self.image_label.setCursor(QtCore.Qt.ArrowCursor)
+                    return True
+                if event.button() == QtCore.Qt.RightButton:
+                    self.is_rotating = False
+                    if not self.move_dynamic_refresh.isChecked() and abs(self._pending_da) > 1e-6:
+                        self.rotation_angle = (self.rotation_angle + self._pending_da) % 360.0
+                        self._pending_da = 0.0
+                        self.update_display()
                     self.last_mouse_pos = None
                     self.image_label.setCursor(QtCore.Qt.ArrowCursor)
                     return True
@@ -325,10 +378,24 @@ class SimpleZoomViewer(QtWidgets.QWidget):
             elif event.type() == QtCore.QEvent.MouseMove:
                 if self.is_dragging and self.last_mouse_pos:
                     delta = event.pos() - self.last_mouse_pos
-                    self.offset_x += delta.x()
-                    self.offset_y += delta.y()
+                    if self.move_dynamic_refresh.isChecked():
+                        self.offset_x += delta.x()
+                        self.offset_y += delta.y()
+                        self.update_display()
+                    else:
+                        self._pending_dx += delta.x()
+                        self._pending_dy += delta.y()
                     self.last_mouse_pos = event.pos()
-                    self.update_display()
+                    return True
+                if self.is_rotating and self.last_mouse_pos:
+                    delta = event.pos() - self.last_mouse_pos
+                    delta_angle = delta.x() * 0.5
+                    if self.move_dynamic_refresh.isChecked():
+                        self.rotation_angle = (self.rotation_angle + delta_angle) % 360.0
+                        self.update_display()
+                    else:
+                        self._pending_da += delta_angle
+                    self.last_mouse_pos = event.pos()
                     return True
             
             elif event.type() == QtCore.QEvent.Wheel:
@@ -354,6 +421,10 @@ class SimpleZoomViewer(QtWidgets.QWidget):
         self.scale_factor = 1.0
         self.offset_x = 0
         self.offset_y = 0
+        self.rotation_angle = 0.0
+        self._pending_dx = 0
+        self._pending_dy = 0
+        self._pending_da = 0.0
         self.zoom_display.setText("100%")
         self.update_display()
     
@@ -374,6 +445,10 @@ class SimpleZoomViewer(QtWidgets.QWidget):
         # 重置偏移
         self.offset_x = 0
         self.offset_y = 0
+        self.rotation_angle = 0.0
+        self._pending_dx = 0
+        self._pending_dy = 0
+        self._pending_da = 0.0
         
         self.zoom_display.setText(f"{int(self.scale_factor*100)}%")
         self.update_display()
@@ -381,12 +456,40 @@ class SimpleZoomViewer(QtWidgets.QWidget):
     def update_image(self, new_image):
         """更新显示的图像"""
         self.image_array = new_image
+        self.offset_x = 0
+        self.offset_y = 0
+        self.rotation_angle = 0.0
+        self._pending_dx = 0
+        self._pending_dy = 0
+        self._pending_da = 0.0
+        self.update_display()
+
+    def _push_history_state(self):
+        """保存当前变换状态用于撤销"""
+        self.move_history.append((self.offset_x, self.offset_y, self.rotation_angle))
+        if len(self.move_history) > 100:
+            self.move_history.pop(0)
+
+    def undo_move(self):
+        """撤销上一步移动/旋转"""
+        if not self.move_history:
+            return
+        self.offset_x, self.offset_y, self.rotation_angle = self.move_history.pop()
+        self._pending_dx = 0
+        self._pending_dy = 0
+        self._pending_da = 0.0
         self.update_display()
     
     def update_display(self):
         """更新显示"""
         # 转换为uint8用于显示
-        display_image = (self.image_array / 65535.0 * 255).astype(np.uint8)
+        img = self.image_array.astype(np.float32)
+        img_min = float(np.min(img))
+        img_max = float(np.max(img))
+        if img_max > img_min:
+            display_image = ((img - img_min) / (img_max - img_min) * 255.0).astype(np.uint8)
+        else:
+            display_image = np.zeros_like(img, dtype=np.uint8)
         
         # 获取图像尺寸
         h, w = display_image.shape
@@ -404,8 +507,27 @@ class SimpleZoomViewer(QtWidgets.QWidget):
         
         # 转换为QPixmap
         pixmap = QtGui.QPixmap.fromImage(qimg)
+
+        # 旋转（围绕图像中心）
+        if abs(self.rotation_angle) > 1e-6:
+            transform = QtGui.QTransform()
+            transform.rotate(self.rotation_angle)
+            pixmap = pixmap.transformed(transform, QtCore.Qt.SmoothTransformation)
+
+        # 将图像绘制到居中画布，并应用平移偏移
+        viewport_size = self.scroll_area.viewport().size()
+        canvas_w = max(viewport_size.width(), pixmap.width() + abs(int(self.offset_x)) * 2 + 20)
+        canvas_h = max(viewport_size.height(), pixmap.height() + abs(int(self.offset_y)) * 2 + 20)
+        canvas = QtGui.QPixmap(canvas_w, canvas_h)
+        canvas.fill(QtGui.QColor(28, 28, 28))
+
+        painter = QtGui.QPainter(canvas)
+        draw_x = (canvas_w - pixmap.width()) // 2 + int(self.offset_x)
+        draw_y = (canvas_h - pixmap.height()) // 2 + int(self.offset_y)
+        painter.drawPixmap(draw_x, draw_y, pixmap)
+        painter.end()
         
         # 显示
-        self.image_label.setPixmap(pixmap)
-        self.image_label.resize(pixmap.size())
+        self.image_label.setPixmap(canvas)
+        self.image_label.resize(canvas.size())
 
