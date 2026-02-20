@@ -24,6 +24,107 @@ class CommonImageFiltersEngine:
         return sitk.Cast(sitk.RescaleIntensity(image, 0, 65535), sitk.sitkUInt16)
 
     @staticmethod
+    def _normalize_radius(radius, ndim: int):
+        if isinstance(radius, (int, float)):
+            r = int(max(0, radius))
+            return tuple([r] * ndim)
+        values = list(radius)
+        if len(values) != ndim:
+            if len(values) == 1:
+                return tuple([int(max(0, values[0]))] * ndim)
+            raise ValueError(f"radius 维度不匹配，期望 {ndim} 维")
+        return tuple(int(max(0, v)) for v in values)
+
+    @staticmethod
+    def _polygon_mask_2d(shape, radius: int, sides: int):
+        h, w = shape
+        cy = (h - 1) / 2.0
+        cx = (w - 1) / 2.0
+        angles = np.linspace(0, 2 * np.pi, max(3, int(sides)), endpoint=False)
+        vy = cy + radius * np.sin(angles)
+        vx = cx + radius * np.cos(angles)
+
+        yy, xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
+        inside = np.zeros((h, w), dtype=bool)
+        n = len(vx)
+        eps = 1e-12
+
+        for i in range(n):
+            j = (i - 1) % n
+            xi, yi = vx[i], vy[i]
+            xj, yj = vx[j], vy[j]
+            cond = ((yi > yy) != (yj > yy))
+            x_inter = (xj - xi) * (yy - yi) / (yj - yi + eps) + xi
+            inside ^= cond & (xx < x_inter)
+
+        return inside
+
+    @staticmethod
+    def _reconstruct_by_dilation(marker: np.ndarray, mask: np.ndarray, footprint: np.ndarray, max_iter: int = 2048):
+        prev = marker.astype(np.float32, copy=True)
+        for _ in range(max_iter):
+            curr = np.minimum(ndimage.grey_dilation(prev, footprint=footprint), mask)
+            if np.array_equal(curr, prev):
+                break
+            prev = curr
+        return prev
+
+    @staticmethod
+    def _reconstruct_by_erosion(marker: np.ndarray, mask: np.ndarray, footprint: np.ndarray, max_iter: int = 2048):
+        prev = marker.astype(np.float32, copy=True)
+        for _ in range(max_iter):
+            curr = np.maximum(ndimage.grey_erosion(prev, footprint=footprint), mask)
+            if np.array_equal(curr, prev):
+                break
+            prev = curr
+        return prev
+
+    @staticmethod
+    def _make_footprint(ndim: int, radius=(1, 1, 1), shape: str = "ball", polygon_sides: int = 6):
+        radius = CommonImageFiltersEngine._normalize_radius(radius, ndim)
+        shape = (shape or "ball").lower()
+        shape_alias = {
+            "ball": "ball", "sphere": "ball", "球": "ball",
+            "box": "box", "cube": "box", "盒": "box", "方": "box",
+            "cross": "cross", "十字": "cross",
+            "polygon": "polygon", "多边形": "polygon",
+        }
+        shape = shape_alias.get(shape, shape)
+
+        dims = tuple(2 * r + 1 for r in radius)
+
+        if shape == "box":
+            return np.ones(dims, dtype=bool)
+
+        if shape == "cross":
+            grid = np.indices(dims)
+            center = np.array(radius).reshape((ndim,) + (1,) * ndim)
+            non_center = np.sum(grid != center, axis=0)
+            return non_center <= 1
+
+        if shape == "polygon":
+            if ndim == 2:
+                rr = max(radius)
+                return CommonImageFiltersEngine._polygon_mask_2d(dims, rr, polygon_sides)
+            rr = max(radius[1], radius[2]) if ndim >= 3 else max(radius)
+            poly2d = CommonImageFiltersEngine._polygon_mask_2d((dims[-2], dims[-1]), rr, polygon_sides)
+            if ndim == 3:
+                return np.repeat(poly2d[np.newaxis, :, :], dims[0], axis=0)
+            return np.ones(dims, dtype=bool)
+
+        # 默认 ball/ellipsoid
+        grid = np.indices(dims).astype(np.float32)
+        center = np.array(radius, dtype=np.float32).reshape((ndim,) + (1,) * ndim)
+        rr = np.array([max(r, 1) for r in radius], dtype=np.float32).reshape((ndim,) + (1,) * ndim)
+        dist = np.sum(((grid - center) / rr) ** 2, axis=0)
+        return dist <= 1.0
+
+    @staticmethod
+    def _arr_to_sitk_with_info(arr: np.ndarray, ref: sitk.Image) -> sitk.Image:
+        img = sitk.GetImageFromArray(arr)
+        return CommonImageFiltersEngine._copy_info(ref, img)
+
+    @staticmethod
     def _numpy_kernel_from_text(kernel_text: str) -> np.ndarray:
         """
         支持格式：
@@ -314,3 +415,162 @@ class CommonImageFiltersEngine:
         f.SetSigma(float(sigma))
         f.SetUseImageSpacing(bool(use_image_spacing))
         return sitk.Cast(f.Execute(img), sitk.sitkFloat32)
+
+    @staticmethod
+    def dilation(image: sitk.Image, radius: int = 1, kernel_shape: str = "ball", polygon_sides: int = 6) -> sitk.Image:
+        arr = sitk.GetArrayFromImage(CommonImageFiltersEngine._to_float_image(image)).astype(np.float32)
+        fp = CommonImageFiltersEngine._make_footprint(arr.ndim, radius, kernel_shape, polygon_sides)
+        out = ndimage.grey_dilation(arr, footprint=fp)
+        return CommonImageFiltersEngine._arr_to_sitk_with_info(out.astype(np.float32), image)
+
+    @staticmethod
+    def erosion(image: sitk.Image, radius: int = 1, kernel_shape: str = "ball", polygon_sides: int = 6) -> sitk.Image:
+        arr = sitk.GetArrayFromImage(CommonImageFiltersEngine._to_float_image(image)).astype(np.float32)
+        fp = CommonImageFiltersEngine._make_footprint(arr.ndim, radius, kernel_shape, polygon_sides)
+        out = ndimage.grey_erosion(arr, footprint=fp)
+        return CommonImageFiltersEngine._arr_to_sitk_with_info(out.astype(np.float32), image)
+
+    @staticmethod
+    def opening(image: sitk.Image, radius: int = 1, kernel_shape: str = "ball", polygon_sides: int = 6) -> sitk.Image:
+        arr = sitk.GetArrayFromImage(CommonImageFiltersEngine._to_float_image(image)).astype(np.float32)
+        fp = CommonImageFiltersEngine._make_footprint(arr.ndim, radius, kernel_shape, polygon_sides)
+        out = ndimage.grey_opening(arr, footprint=fp)
+        return CommonImageFiltersEngine._arr_to_sitk_with_info(out.astype(np.float32), image)
+
+    @staticmethod
+    def closing(image: sitk.Image, radius: int = 1, kernel_shape: str = "ball", polygon_sides: int = 6) -> sitk.Image:
+        arr = sitk.GetArrayFromImage(CommonImageFiltersEngine._to_float_image(image)).astype(np.float32)
+        fp = CommonImageFiltersEngine._make_footprint(arr.ndim, radius, kernel_shape, polygon_sides)
+        out = ndimage.grey_closing(arr, footprint=fp)
+        return CommonImageFiltersEngine._arr_to_sitk_with_info(out.astype(np.float32), image)
+
+    @staticmethod
+    def opening_by_reconstruction(image: sitk.Image, radius: int = 1,
+                                  kernel_shape: str = "ball", polygon_sides: int = 6) -> sitk.Image:
+        arr = sitk.GetArrayFromImage(CommonImageFiltersEngine._to_float_image(image)).astype(np.float32)
+        fp = CommonImageFiltersEngine._make_footprint(arr.ndim, radius, kernel_shape, polygon_sides)
+        marker = ndimage.grey_erosion(arr, footprint=fp)
+        out = CommonImageFiltersEngine._reconstruct_by_dilation(marker, arr, fp)
+        return CommonImageFiltersEngine._arr_to_sitk_with_info(out.astype(np.float32), image)
+
+    @staticmethod
+    def closing_by_reconstruction(image: sitk.Image, radius: int = 1,
+                                  kernel_shape: str = "ball", polygon_sides: int = 6) -> sitk.Image:
+        arr = sitk.GetArrayFromImage(CommonImageFiltersEngine._to_float_image(image)).astype(np.float32)
+        fp = CommonImageFiltersEngine._make_footprint(arr.ndim, radius, kernel_shape, polygon_sides)
+        marker = ndimage.grey_dilation(arr, footprint=fp)
+        out = CommonImageFiltersEngine._reconstruct_by_erosion(marker, arr, fp)
+        return CommonImageFiltersEngine._arr_to_sitk_with_info(out.astype(np.float32), image)
+
+    @staticmethod
+    def binary_thinning(image: sitk.Image) -> sitk.Image:
+        arr = sitk.GetArrayFromImage(image)
+        binary = arr > 0
+        skel = None
+        if hasattr(sitk, "BinaryThinning"):
+            try:
+                sitk_bin = sitk.Cast(image > 0, sitk.sitkUInt8)
+                thin = sitk.BinaryThinning(sitk_bin)
+                skel = sitk.GetArrayFromImage(thin) > 0
+            except Exception:
+                skel = None
+
+        if skel is None:
+            skel = np.zeros_like(binary, dtype=bool)
+            work = binary.copy()
+            fp = ndimage.generate_binary_structure(binary.ndim, 1)
+            while np.any(work):
+                eroded = ndimage.binary_erosion(work, structure=fp)
+                opened = ndimage.binary_dilation(eroded, structure=fp)
+                skel |= work & (~opened)
+                if np.array_equal(eroded, work):
+                    break
+                work = eroded
+
+        out = (skel.astype(np.uint8) * 255).astype(np.uint8)
+        return CommonImageFiltersEngine._arr_to_sitk_with_info(out, image)
+
+    @staticmethod
+    def fill_hole_binary(image: sitk.Image) -> sitk.Image:
+        arr = sitk.GetArrayFromImage(image)
+        binary = arr > 0
+        filled = ndimage.binary_fill_holes(binary)
+        out = (filled.astype(np.uint8) * 255).astype(np.uint8)
+        return CommonImageFiltersEngine._arr_to_sitk_with_info(out, image)
+
+    @staticmethod
+    def fill_hole_grayscale(image: sitk.Image) -> sitk.Image:
+        arr = sitk.GetArrayFromImage(CommonImageFiltersEngine._to_float_image(image)).astype(np.float32)
+        seed = arr.copy()
+        interior = tuple(slice(1, -1) if s > 2 else slice(0, s) for s in arr.shape)
+        seed[interior] = np.max(arr)
+        fp = np.ones(tuple([3] * arr.ndim), dtype=bool)
+        filled = CommonImageFiltersEngine._reconstruct_by_erosion(seed, arr, fp)
+        return CommonImageFiltersEngine._arr_to_sitk_with_info(filled.astype(np.float32), image)
+
+    @staticmethod
+    def vessel_enhancement(image: sitk.Image, sigma_min: float = 1.0, sigma_max: float = 4.0,
+                           sigma_step: float = 1.0, alpha: float = 0.5,
+                           beta: float = 0.5, gamma: float = 15.0,
+                           black_ridges: bool = False) -> sitk.Image:
+        arr = sitk.GetArrayFromImage(CommonImageFiltersEngine._to_float_image(image)).astype(np.float32)
+        amin = float(arr.min())
+        amax = float(arr.max())
+        if amax > amin:
+            arr_n = (arr - amin) / (amax - amin)
+        else:
+            arr_n = np.zeros_like(arr, dtype=np.float32)
+
+        sigma_min = max(0.1, float(sigma_min))
+        sigma_max = max(sigma_min, float(sigma_max))
+        sigma_step = max(0.1, float(sigma_step))
+        sigmas = np.arange(sigma_min, sigma_max + 1e-6, sigma_step, dtype=np.float32)
+
+        alpha = max(float(alpha), 1e-6)
+        beta = max(float(beta), 1e-6)
+        gamma = max(float(gamma), 1e-6)
+
+        vessel = np.zeros_like(arr_n, dtype=np.float32)
+        for sigma in sigmas:
+            dxx = ndimage.gaussian_filter(arr_n, sigma=sigma, order=(0, 0, 2))
+            dyy = ndimage.gaussian_filter(arr_n, sigma=sigma, order=(0, 2, 0))
+            dzz = ndimage.gaussian_filter(arr_n, sigma=sigma, order=(2, 0, 0))
+            dxy = ndimage.gaussian_filter(arr_n, sigma=sigma, order=(0, 1, 1))
+            dxz = ndimage.gaussian_filter(arr_n, sigma=sigma, order=(1, 0, 1))
+            dyz = ndimage.gaussian_filter(arr_n, sigma=sigma, order=(1, 1, 0))
+
+            h = np.zeros(arr_n.shape + (3, 3), dtype=np.float32)
+            h[..., 0, 0] = dxx
+            h[..., 1, 1] = dyy
+            h[..., 2, 2] = dzz
+            h[..., 0, 1] = dxy
+            h[..., 1, 0] = dxy
+            h[..., 0, 2] = dxz
+            h[..., 2, 0] = dxz
+            h[..., 1, 2] = dyz
+            h[..., 2, 1] = dyz
+
+            evals = np.linalg.eigvalsh(h)
+            idx = np.argsort(np.abs(evals), axis=-1)
+            l1 = np.take_along_axis(evals, idx[..., 0:1], axis=-1)[..., 0]
+            l2 = np.take_along_axis(evals, idx[..., 1:2], axis=-1)[..., 0]
+            l3 = np.take_along_axis(evals, idx[..., 2:3], axis=-1)[..., 0]
+
+            eps = 1e-12
+            ra = np.abs(l2) / (np.abs(l3) + eps)
+            rb = np.abs(l1) / (np.sqrt(np.abs(l2 * l3)) + eps)
+            s = np.sqrt(l1 * l1 + l2 * l2 + l3 * l3)
+
+            v = (1.0 - np.exp(-(ra * ra) / (2.0 * alpha * alpha)))
+            v *= np.exp(-(rb * rb) / (2.0 * beta * beta))
+            v *= (1.0 - np.exp(-(s * s) / (2.0 * gamma * gamma)))
+
+            if black_ridges:
+                valid = (l2 > 0) & (l3 > 0)
+            else:
+                valid = (l2 < 0) & (l3 < 0)
+
+            v = np.where(valid, v, 0.0).astype(np.float32)
+            vessel = np.maximum(vessel, v)
+
+        return CommonImageFiltersEngine._arr_to_sitk_with_info(vessel, image)

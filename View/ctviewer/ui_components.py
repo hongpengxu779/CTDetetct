@@ -633,6 +633,47 @@ class UIComponents:
             hderiv_action.triggered.connect(self.run_higher_order_accurate_derivative)
             grad_menu.addAction(hderiv_action)
 
+        morph_menu = common_filter_menu.addMenu("形态学")
+        dilation_action = QtWidgets.QAction("灰度膨胀", self)
+        dilation_action.triggered.connect(self.run_morphology_dilation)
+        morph_menu.addAction(dilation_action)
+
+        erosion_action = QtWidgets.QAction("灰度腐蚀", self)
+        erosion_action.triggered.connect(self.run_morphology_erosion)
+        morph_menu.addAction(erosion_action)
+
+        opening_action = QtWidgets.QAction("开运算", self)
+        opening_action.triggered.connect(self.run_morphology_opening)
+        morph_menu.addAction(opening_action)
+
+        closing_action = QtWidgets.QAction("闭运算", self)
+        closing_action.triggered.connect(self.run_morphology_closing)
+        morph_menu.addAction(closing_action)
+
+        obr_action = QtWidgets.QAction("重建开运算", self)
+        obr_action.triggered.connect(self.run_morphology_opening_by_reconstruction)
+        morph_menu.addAction(obr_action)
+
+        cbr_action = QtWidgets.QAction("重建闭运算", self)
+        cbr_action.triggered.connect(self.run_morphology_closing_by_reconstruction)
+        morph_menu.addAction(cbr_action)
+
+        thinning_action = QtWidgets.QAction("二值细化/骨架化", self)
+        thinning_action.triggered.connect(self.run_binary_thinning)
+        morph_menu.addAction(thinning_action)
+
+        fill_bin_action = QtWidgets.QAction("二值孔洞填充", self)
+        fill_bin_action.triggered.connect(self.run_fill_hole_binary)
+        morph_menu.addAction(fill_bin_action)
+
+        fill_gray_action = QtWidgets.QAction("灰度孔洞填充", self)
+        fill_gray_action.triggered.connect(self.run_fill_hole_grayscale)
+        morph_menu.addAction(fill_gray_action)
+
+        vessel_action = QtWidgets.QAction("血管增强(Vesselness)", self)
+        vessel_action.triggered.connect(self.run_vessel_enhancement)
+        common_filter_menu.addAction(vessel_action)
+
         hessian_action = QtWidgets.QAction("Hessian 特征值分析", self)
         hessian_action.triggered.connect(self.run_hessian_eigen_analysis)
         common_filter_menu.addAction(hessian_action)

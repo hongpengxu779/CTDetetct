@@ -140,6 +140,78 @@ class CommonImageFilterOperations:
                 {"name": "use_image_spacing", "label": "按物理 spacing", "type": "bool", "default": True},
             ],
         },
+        "dilation": {
+            "title": "灰度膨胀",
+            "fields": [
+                {"name": "radius", "label": "结构元半径", "type": "int", "default": 1, "min": 0, "max": 128},
+                {"name": "kernel_shape", "label": "结构元形状(ball/box/cross/polygon)", "type": "text", "default": "ball"},
+                {"name": "polygon_sides", "label": "多边形边数", "type": "int", "default": 6, "min": 3, "max": 20},
+            ],
+        },
+        "erosion": {
+            "title": "灰度腐蚀",
+            "fields": [
+                {"name": "radius", "label": "结构元半径", "type": "int", "default": 1, "min": 0, "max": 128},
+                {"name": "kernel_shape", "label": "结构元形状(ball/box/cross/polygon)", "type": "text", "default": "ball"},
+                {"name": "polygon_sides", "label": "多边形边数", "type": "int", "default": 6, "min": 3, "max": 20},
+            ],
+        },
+        "opening": {
+            "title": "开运算",
+            "fields": [
+                {"name": "radius", "label": "结构元半径", "type": "int", "default": 1, "min": 0, "max": 128},
+                {"name": "kernel_shape", "label": "结构元形状(ball/box/cross/polygon)", "type": "text", "default": "ball"},
+                {"name": "polygon_sides", "label": "多边形边数", "type": "int", "default": 6, "min": 3, "max": 20},
+            ],
+        },
+        "closing": {
+            "title": "闭运算",
+            "fields": [
+                {"name": "radius", "label": "结构元半径", "type": "int", "default": 1, "min": 0, "max": 128},
+                {"name": "kernel_shape", "label": "结构元形状(ball/box/cross/polygon)", "type": "text", "default": "ball"},
+                {"name": "polygon_sides", "label": "多边形边数", "type": "int", "default": 6, "min": 3, "max": 20},
+            ],
+        },
+        "opening_by_reconstruction": {
+            "title": "重建开运算",
+            "fields": [
+                {"name": "radius", "label": "结构元半径", "type": "int", "default": 1, "min": 0, "max": 128},
+                {"name": "kernel_shape", "label": "结构元形状(ball/box/cross/polygon)", "type": "text", "default": "ball"},
+                {"name": "polygon_sides", "label": "多边形边数", "type": "int", "default": 6, "min": 3, "max": 20},
+            ],
+        },
+        "closing_by_reconstruction": {
+            "title": "重建闭运算",
+            "fields": [
+                {"name": "radius", "label": "结构元半径", "type": "int", "default": 1, "min": 0, "max": 128},
+                {"name": "kernel_shape", "label": "结构元形状(ball/box/cross/polygon)", "type": "text", "default": "ball"},
+                {"name": "polygon_sides", "label": "多边形边数", "type": "int", "default": 6, "min": 3, "max": 20},
+            ],
+        },
+        "binary_thinning": {
+            "title": "二值细化/骨架化",
+            "fields": [],
+        },
+        "fill_hole_binary": {
+            "title": "二值孔洞填充",
+            "fields": [],
+        },
+        "fill_hole_grayscale": {
+            "title": "灰度孔洞填充",
+            "fields": [],
+        },
+        "vessel_enhancement": {
+            "title": "血管增强(Vesselness)",
+            "fields": [
+                {"name": "sigma_min", "label": "最小尺度 Sigma", "type": "float", "default": 1.0, "min": 0.1, "max": 50.0, "decimals": 3},
+                {"name": "sigma_max", "label": "最大尺度 Sigma", "type": "float", "default": 4.0, "min": 0.1, "max": 100.0, "decimals": 3},
+                {"name": "sigma_step", "label": "尺度步长", "type": "float", "default": 1.0, "min": 0.1, "max": 20.0, "decimals": 3},
+                {"name": "alpha", "label": "Alpha", "type": "float", "default": 0.5, "min": 0.01, "max": 5.0, "decimals": 3},
+                {"name": "beta", "label": "Beta", "type": "float", "default": 0.5, "min": 0.01, "max": 5.0, "decimals": 3},
+                {"name": "gamma", "label": "Gamma", "type": "float", "default": 15.0, "min": 0.01, "max": 100.0, "decimals": 3},
+                {"name": "black_ridges", "label": "黑脊线目标", "type": "bool", "default": False},
+            ],
+        },
     }
 
     def _ensure_common_filter_variables(self):
@@ -457,6 +529,46 @@ class CommonImageFilterOperations:
                 result = CommonImageFiltersEngine.laplacian_of_gaussian(input_image, **params)
                 self._save_and_show_result_as_layer("Hessian/LoG", spec["title"], result)
 
+            elif key == "dilation":
+                result = CommonImageFiltersEngine.dilation(input_image, **params)
+                self._save_and_show_result_as_layer("形态学", spec["title"], result)
+
+            elif key == "erosion":
+                result = CommonImageFiltersEngine.erosion(input_image, **params)
+                self._save_and_show_result_as_layer("形态学", spec["title"], result)
+
+            elif key == "opening":
+                result = CommonImageFiltersEngine.opening(input_image, **params)
+                self._save_and_show_result_as_layer("形态学", spec["title"], result)
+
+            elif key == "closing":
+                result = CommonImageFiltersEngine.closing(input_image, **params)
+                self._save_and_show_result_as_layer("形态学", spec["title"], result)
+
+            elif key == "opening_by_reconstruction":
+                result = CommonImageFiltersEngine.opening_by_reconstruction(input_image, **params)
+                self._save_and_show_result_as_layer("形态学", spec["title"], result)
+
+            elif key == "closing_by_reconstruction":
+                result = CommonImageFiltersEngine.closing_by_reconstruction(input_image, **params)
+                self._save_and_show_result_as_layer("形态学", spec["title"], result)
+
+            elif key == "binary_thinning":
+                result = CommonImageFiltersEngine.binary_thinning(input_image)
+                self._save_and_show_result_as_layer("形态学", spec["title"], result)
+
+            elif key == "fill_hole_binary":
+                result = CommonImageFiltersEngine.fill_hole_binary(input_image)
+                self._save_and_show_result_as_layer("形态学", spec["title"], result)
+
+            elif key == "fill_hole_grayscale":
+                result = CommonImageFiltersEngine.fill_hole_grayscale(input_image)
+                self._save_and_show_result_as_layer("形态学", spec["title"], result)
+
+            elif key == "vessel_enhancement":
+                result = CommonImageFiltersEngine.vessel_enhancement(input_image, **params)
+                self._save_and_show_result_as_layer("形态学", spec["title"], result)
+
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "执行失败", f"{spec['title']} 执行失败:\n{str(e)}")
         finally:
@@ -516,3 +628,33 @@ class CommonImageFilterOperations:
 
     def run_laplacian_of_gaussian(self):
         self.run_common_image_filter("laplacian_of_gaussian")
+
+    def run_morphology_dilation(self):
+        self.run_common_image_filter("dilation")
+
+    def run_morphology_erosion(self):
+        self.run_common_image_filter("erosion")
+
+    def run_morphology_opening(self):
+        self.run_common_image_filter("opening")
+
+    def run_morphology_closing(self):
+        self.run_common_image_filter("closing")
+
+    def run_morphology_opening_by_reconstruction(self):
+        self.run_common_image_filter("opening_by_reconstruction")
+
+    def run_morphology_closing_by_reconstruction(self):
+        self.run_common_image_filter("closing_by_reconstruction")
+
+    def run_binary_thinning(self):
+        self.run_common_image_filter("binary_thinning")
+
+    def run_fill_hole_binary(self):
+        self.run_common_image_filter("fill_hole_binary")
+
+    def run_fill_hole_grayscale(self):
+        self.run_common_image_filter("fill_hole_grayscale")
+
+    def run_vessel_enhancement(self):
+        self.run_common_image_filter("vessel_enhancement")
