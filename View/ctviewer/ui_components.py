@@ -276,8 +276,8 @@ class UIComponents:
         """创建顶部紧凑工具条（单行优先，避免挤压主视图区）"""
         style = self.style()
 
-        # Manipulate 工具组（Track / Pan / Cine / Zoom + Fit / Reset）
-        manipulate_toolbar = QtWidgets.QToolBar("Manipulate", self)
+        # 操作工具组（跟踪 / 平移 / 滚片 / 缩放 + 适配 / 重置）
+        manipulate_toolbar = QtWidgets.QToolBar("操作", self)
         manipulate_toolbar.setMovable(False)
         manipulate_toolbar.setIconSize(QtCore.QSize(16, 16))
         manipulate_toolbar.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
@@ -286,29 +286,29 @@ class UIComponents:
         self.manipulate_action_group = QtWidgets.QActionGroup(self)
         self.manipulate_action_group.setExclusive(True)
 
-        self.track_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DialogYesButton), "Track", self)
-        self.track_action.setToolTip("Track（十字线联动）")
+        self.track_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DialogYesButton), "跟踪", self)
+        self.track_action.setToolTip("跟踪（十字线联动）")
         self.track_action.setCheckable(True)
         self.track_action.triggered.connect(self.set_track_mode)
         self.manipulate_action_group.addAction(self.track_action)
         manipulate_toolbar.addAction(self.track_action)
 
-        self.pan_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowLeft), "Pan", self)
-        self.pan_action.setToolTip("Pan（平移）")
+        self.pan_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowLeft), "平移", self)
+        self.pan_action.setToolTip("平移")
         self.pan_action.setCheckable(True)
         self.pan_action.triggered.connect(self.set_pan_mode)
         self.manipulate_action_group.addAction(self.pan_action)
         manipulate_toolbar.addAction(self.pan_action)
 
-        self.cine_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_MediaPlay), "Cine", self)
-        self.cine_action.setToolTip("Cine（自动滚片）")
+        self.cine_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_MediaPlay), "滚片", self)
+        self.cine_action.setToolTip("滚片（自动浏览切片）")
         self.cine_action.setCheckable(True)
         self.cine_action.toggled.connect(self.set_cine_mode)
         self.manipulate_action_group.addAction(self.cine_action)
         manipulate_toolbar.addAction(self.cine_action)
 
-        self.zoom_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowUp), "Zoom", self)
-        self.zoom_action.setToolTip("Zoom（缩放）")
+        self.zoom_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowUp), "缩放", self)
+        self.zoom_action.setToolTip("缩放")
         self.zoom_action.setCheckable(True)
         self.zoom_action.triggered.connect(self.set_zoom_mode)
         self.manipulate_action_group.addAction(self.zoom_action)
@@ -316,13 +316,13 @@ class UIComponents:
 
         manipulate_toolbar.addSeparator()
 
-        self.fit_view_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_TitleBarMaxButton), "Fit", self)
-        self.fit_view_action.setToolTip("Fit to View")
+        self.fit_view_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_TitleBarMaxButton), "适配", self)
+        self.fit_view_action.setToolTip("适配视图")
         self.fit_view_action.triggered.connect(self.fit_all_views)
         manipulate_toolbar.addAction(self.fit_view_action)
 
-        self.reset_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_BrowserReload), "Reset", self)
-        self.reset_action.setToolTip("Reset")
+        self.reset_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_BrowserReload), "重置", self)
+        self.reset_action.setToolTip("重置")
         self.reset_action.triggered.connect(self.reset_view_transform)
         manipulate_toolbar.addAction(self.reset_action)
 
@@ -369,13 +369,13 @@ class UIComponents:
 
         primary_toolbar.addSeparator()
 
-        roi_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DirIcon), "ROI", self)
-        roi_action.setToolTip("ROI")
+        roi_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_DirIcon), "感兴趣区", self)
+        roi_action.setToolTip("感兴趣区")
         roi_action.triggered.connect(self.roi_selection_start)
         primary_toolbar.addAction(roi_action)
 
-        roi_clear_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_TrashIcon), "清除ROI", self)
-        roi_clear_action.setToolTip("清除ROI")
+        roi_clear_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_TrashIcon), "清除感兴趣区", self)
+        roi_clear_action.setToolTip("清除感兴趣区")
         roi_clear_action.triggered.connect(self.roi_selection_clear)
         primary_toolbar.addAction(roi_clear_action)
 
@@ -910,7 +910,7 @@ class UIComponents:
         move_layout = QtWidgets.QVBoxLayout(move_group)
         move_btn_row = QtWidgets.QHBoxLayout()
         self.move_tool_btn = QtWidgets.QToolButton()
-        self.move_tool_btn.setText("Move")
+        self.move_tool_btn.setText("移动")
         self.move_tool_btn.setCheckable(True)
         self.move_tool_btn.setToolTip("左键平移，右键旋转")
         self.move_tool_btn.toggled.connect(self.toggle_move_tool)
@@ -963,7 +963,7 @@ class UIComponents:
         mode_row = QtWidgets.QHBoxLayout()
         mode_row.addWidget(QtWidgets.QLabel("视图模式:"))
         self.view_mode_combo = QtWidgets.QComboBox()
-        self.view_mode_combo.addItems(["2D", "3D", "2D+3D"])
+        self.view_mode_combo.addItems(["二维", "三维", "二维+三维"])
         self.view_mode_combo.setCurrentIndex(2)
         mode_row.addWidget(self.view_mode_combo)
         scene_layout.addLayout(mode_row)
@@ -1079,7 +1079,7 @@ class UIComponents:
         self.depth_of_field_slider.valueChanged.connect(lambda _: self.apply_3d_focus_settings())
 
         # 2D视图
-        view2d_group = QtWidgets.QGroupBox("2D视图")
+        view2d_group = QtWidgets.QGroupBox("二维视图")
         view2d_layout = QtWidgets.QGridLayout(view2d_group)
         view2d_layout.setSpacing(4)
         side_btn = QtWidgets.QToolButton(); side_btn.setText("侧视图"); side_btn.clicked.connect(lambda: self.switch_2d_view("side"))
@@ -1093,7 +1093,7 @@ class UIComponents:
         main_console_layout.addWidget(view2d_group)
         
         # 创建ROI分组框
-        roi_group = QtWidgets.QGroupBox("3D 感兴趣区域")
+        roi_group = QtWidgets.QGroupBox("三维感兴趣区域")
         roi_group.setStyleSheet("QGroupBox { font-weight: bold; padding-top: 10px; }")
         roi_group_layout = QtWidgets.QVBoxLayout(roi_group)
         roi_group_layout.setSpacing(8)
@@ -1128,7 +1128,7 @@ class UIComponents:
         
         # 深度最小值滑动条
         depth_min_layout = QtWidgets.QHBoxLayout()
-        depth_min_text = QtWidgets.QLabel("Min:")
+        depth_min_text = QtWidgets.QLabel("最小:")
         depth_min_text.setStyleSheet("QLabel { font-weight: normal; }")
         depth_min_layout.addWidget(depth_min_text)
         
@@ -1149,7 +1149,7 @@ class UIComponents:
         
         # 深度最大值滑动条
         depth_max_layout = QtWidgets.QHBoxLayout()
-        depth_max_text = QtWidgets.QLabel("Max:")
+        depth_max_text = QtWidgets.QLabel("最大:")
         depth_max_text.setStyleSheet("QLabel { font-weight: normal; }")
         depth_max_layout.addWidget(depth_max_text)
         
@@ -1169,7 +1169,7 @@ class UIComponents:
         roi_group_layout.addLayout(depth_max_layout)
         
         # 3D预览按钮
-        roi_3d_btn = QtWidgets.QPushButton("3D预览")
+        roi_3d_btn = QtWidgets.QPushButton("三维预览")
         roi_3d_btn.setStyleSheet("QPushButton { font-weight: normal; padding: 8px; }")
         roi_3d_btn.clicked.connect(self.preview_roi_3d)
         roi_group_layout.addWidget(roi_3d_btn)
@@ -1205,7 +1205,7 @@ class UIComponents:
         segmentation_layout.setContentsMargins(2, 2, 2, 2)
         segmentation_layout.setSpacing(4)
 
-        ai_seg_group = QtWidgets.QGroupBox("AI / 深度学习分割")
+        ai_seg_group = QtWidgets.QGroupBox("智能分割")
         ai_seg_layout = QtWidgets.QVBoxLayout(ai_seg_group)
         ai_auto_btn = QtWidgets.QPushButton("一键自动分割")
         ai_auto_btn.clicked.connect(self.run_unet_segmentation)
@@ -1286,12 +1286,16 @@ class UIComponents:
         
         # 创建右侧面板（垂直分割成上下两部分）
         self.right_panel = QtWidgets.QWidget()
-        self.right_panel.setMaximumWidth(300)
-        self.right_panel.setMinimumWidth(260)
-        self.right_panel.setStyleSheet("background-color: #303030; border-left: 1px solid #1f1f1f;")
+        self.right_panel.setMaximumWidth(360)
+        self.right_panel.setMinimumWidth(300)
+        self.right_panel.setStyleSheet("background-color: #2f2f2f; border-left: 1px solid #1f1f1f;")
         right_panel_layout = QtWidgets.QVBoxLayout(self.right_panel)
-        right_panel_layout.setContentsMargins(8, 8, 8, 8)
-        right_panel_layout.setSpacing(8)
+        right_panel_layout.setContentsMargins(6, 6, 6, 6)
+        right_panel_layout.setSpacing(6)
+
+        right_panel_title = QtWidgets.QLabel("图像属性和设置")
+        right_panel_title.setStyleSheet("QLabel { font-weight: bold; font-size: 10pt; color: #e3e3e3; border: none; padding: 2px 4px; }")
+        right_panel_layout.addWidget(right_panel_title)
         
         # 数据列表面板（上半部分） - 浅色风格
         data_list_panel = QtWidgets.QWidget()
@@ -1307,11 +1311,11 @@ class UIComponents:
         data_list_layout.setSpacing(4)
         
         # 标题栏
-        data_list_label = QtWidgets.QLabel("图层管理")
+        data_list_label = QtWidgets.QLabel("数据列表")
         data_list_label.setStyleSheet("""
             QLabel {
                 color: #d9d9d9; 
-                font-size: 9pt; 
+                font-size: 9pt;
                 font-weight: bold;
                 background-color: transparent;
                 border: none;
@@ -1320,6 +1324,23 @@ class UIComponents:
         """)
         data_list_label.setAlignment(QtCore.Qt.AlignCenter)
         data_list_layout.addWidget(data_list_label)
+
+        dataset_toolbar = QtWidgets.QHBoxLayout()
+        dataset_toolbar.setSpacing(4)
+
+        self.dataset_filter_btn = QtWidgets.QToolButton()
+        self.dataset_filter_btn.setText("F")
+        self.dataset_filter_btn.setToolTip("过滤数据项")
+        self.dataset_filter_btn.clicked.connect(self._filter_dataset_items)
+        dataset_toolbar.addWidget(self.dataset_filter_btn)
+
+        self.dataset_eye_btn = QtWidgets.QToolButton()
+        self.dataset_eye_btn.setText("👁")
+        self.dataset_eye_btn.setToolTip("显示/隐藏当前数据")
+        self.dataset_eye_btn.clicked.connect(self._toggle_current_dataset_visibility)
+        dataset_toolbar.addWidget(self.dataset_eye_btn)
+        dataset_toolbar.addStretch()
+        data_list_layout.addLayout(dataset_toolbar)
         
         # 创建列表控件
         self.data_list_widget = QtWidgets.QListWidget()
@@ -1342,6 +1363,7 @@ class UIComponents:
                 background-color: #5d5d5d;
             }
         """)
+        self.data_list_widget.currentItemChanged.connect(self.on_data_selection_changed)
         data_list_layout.addWidget(self.data_list_widget)
 
         # 图层可见性与混合设置
@@ -1353,14 +1375,14 @@ class UIComponents:
         self.layer_opacity_slider.setRange(0, 100)
         self.layer_opacity_slider.setValue(100)
         self.layer_blend_combo = QtWidgets.QComboBox()
-        self.layer_blend_combo.addItems(["Normal", "Add", "Multiply", "Screen"])
+        self.layer_blend_combo.addItems(["普通", "相加", "相乘", "滤色"])
         self.layer_mode_combo = QtWidgets.QComboBox()
-        self.layer_mode_combo.addItems(["2D", "3D", "2D/3D"])
+        self.layer_mode_combo.addItems(["二维", "三维", "二维/三维"])
         self.chk_layer_locked = QtWidgets.QCheckBox("锁定图层")
         layer_ctrl_layout.addRow(self.chk_layer_visible)
         layer_ctrl_layout.addRow("透明度", self.layer_opacity_slider)
         layer_ctrl_layout.addRow("混合模式", self.layer_blend_combo)
-        layer_ctrl_layout.addRow("2D/3D", self.layer_mode_combo)
+        layer_ctrl_layout.addRow("二维/三维", self.layer_mode_combo)
         layer_ctrl_layout.addRow(self.chk_layer_locked)
         data_list_layout.addWidget(layer_ctrl_group)
         
@@ -1521,17 +1543,17 @@ class UIComponents:
 
         # 第一行：Log Y + 窗口阈值
         top_row = QtWidgets.QHBoxLayout()
-        self.histogram_logy_checkbox = QtWidgets.QCheckBox("Log Y")
+        self.histogram_logy_checkbox = QtWidgets.QCheckBox("Y轴对数")
         self.histogram_logy_checkbox.setChecked(True)
         self.histogram_logy_checkbox.toggled.connect(self.on_histogram_log_toggled)
         top_row.addWidget(self.histogram_logy_checkbox)
         top_row.addStretch()
-        top_row.addWidget(QtWidgets.QLabel("Min:"))
+        top_row.addWidget(QtWidgets.QLabel("最小:"))
         self.histogram_window_min_edit = QtWidgets.QLineEdit("0")
         self.histogram_window_min_edit.setFixedWidth(62)
         self.histogram_window_min_edit.editingFinished.connect(self.on_histogram_window_edit_finished)
         top_row.addWidget(self.histogram_window_min_edit)
-        top_row.addWidget(QtWidgets.QLabel("Max:"))
+        top_row.addWidget(QtWidgets.QLabel("最大:"))
         self.histogram_window_max_edit = QtWidgets.QLineEdit("0")
         self.histogram_window_max_edit.setFixedWidth(62)
         self.histogram_window_max_edit.editingFinished.connect(self.on_histogram_window_edit_finished)
@@ -1540,7 +1562,7 @@ class UIComponents:
 
         # 第二行：窗宽/窗位滑条（从左侧迁移）
         ww_row = QtWidgets.QHBoxLayout()
-        ww_row.addWidget(QtWidgets.QLabel("W:"))
+        ww_row.addWidget(QtWidgets.QLabel("窗宽:"))
         self.ww_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         self.ww_slider.setMinimum(1)
         self.ww_slider.setMaximum(65535)
@@ -1554,7 +1576,7 @@ class UIComponents:
         histogram_ctrl_layout.addLayout(ww_row)
 
         wl_row = QtWidgets.QHBoxLayout()
-        wl_row.addWidget(QtWidgets.QLabel("L:"))
+        wl_row.addWidget(QtWidgets.QLabel("窗位:"))
         self.wl_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         self.wl_slider.setMinimum(0)
         self.wl_slider.setMaximum(65535)
@@ -1568,18 +1590,18 @@ class UIComponents:
         histogram_ctrl_layout.addLayout(wl_row)
 
         # 第三行：高级绘图范围控制
-        adv_group = QtWidgets.QGroupBox("Advanced plot controls")
+        adv_group = QtWidgets.QGroupBox("高级绘图控制")
         adv_layout = QtWidgets.QVBoxLayout(adv_group)
         adv_layout.setContentsMargins(6, 8, 6, 6)
         adv_layout.setSpacing(4)
 
         adv_range_row = QtWidgets.QHBoxLayout()
-        adv_range_row.addWidget(QtWidgets.QLabel("Min:"))
+        adv_range_row.addWidget(QtWidgets.QLabel("最小:"))
         self.histogram_plot_min_edit = QtWidgets.QLineEdit("0")
         self.histogram_plot_min_edit.setFixedWidth(62)
         adv_range_row.addWidget(self.histogram_plot_min_edit)
         adv_range_row.addSpacing(8)
-        adv_range_row.addWidget(QtWidgets.QLabel("Max:"))
+        adv_range_row.addWidget(QtWidgets.QLabel("最大:"))
         self.histogram_plot_max_edit = QtWidgets.QLineEdit("0")
         self.histogram_plot_max_edit.setFixedWidth(62)
         adv_range_row.addWidget(self.histogram_plot_max_edit)
@@ -1606,12 +1628,12 @@ class UIComponents:
         adv_btn_row.addWidget(self.hist_mode_zoom_btn)
         adv_btn_row.addStretch()
 
-        self.histogram_reset_btn = QtWidgets.QPushButton("Reset")
+        self.histogram_reset_btn = QtWidgets.QPushButton("重置")
         self.histogram_reset_btn.setFixedHeight(22)
         self.histogram_reset_btn.clicked.connect(self.on_histogram_reset_clicked)
         adv_btn_row.addWidget(self.histogram_reset_btn)
 
-        self.histogram_apply_btn = QtWidgets.QPushButton("Apply")
+        self.histogram_apply_btn = QtWidgets.QPushButton("应用")
         self.histogram_apply_btn.setFixedHeight(22)
         self.histogram_apply_btn.clicked.connect(self.on_histogram_apply_clicked)
         adv_btn_row.addWidget(self.histogram_apply_btn)
@@ -1620,7 +1642,7 @@ class UIComponents:
 
         # 第四行：bin width + home
         bottom_row = QtWidgets.QHBoxLayout()
-        bottom_row.addWidget(QtWidgets.QLabel("bin width:"))
+        bottom_row.addWidget(QtWidgets.QLabel("分箱宽度:"))
         self.histogram_bin_width_spin = QtWidgets.QSpinBox()
         self.histogram_bin_width_spin.setRange(1, 256)
         self.histogram_bin_width_spin.setValue(4)
@@ -1679,16 +1701,16 @@ class UIComponents:
         property_layout.setContentsMargins(6, 6, 6, 6)
         property_layout.setSpacing(6)
 
-        property_title = QtWidgets.QLabel("数据属性和设定")
+        property_title = QtWidgets.QLabel("图像属性和设置")
         property_title.setAlignment(QtCore.Qt.AlignLeft)
         property_title.setStyleSheet("QLabel { font-weight: bold; font-size: 9pt; color: #dedede; border: none; padding: 1px 2px; }")
         property_layout.addWidget(property_title)
 
         info_form = QtWidgets.QFormLayout()
-        self.prop_size_label = QtWidgets.QLabel("- x - x -")
-        self.prop_spacing_label = QtWidgets.QLabel("- x - x -")
+        self.prop_size_label = QtWidgets.QLabel("- × - × -")
+        self.prop_spacing_label = QtWidgets.QLabel("- × - × -")
         self.prop_type_label = QtWidgets.QLabel("-")
-        self.prop_window_label = QtWidgets.QLabel("W: -, L: -")
+        self.prop_window_label = QtWidgets.QLabel("窗宽: -, 窗位: -")
         info_form.addRow("尺寸:", self.prop_size_label)
         info_form.addRow("间距:", self.prop_spacing_label)
         info_form.addRow("类型:", self.prop_type_label)
@@ -1696,25 +1718,86 @@ class UIComponents:
         property_layout.addLayout(info_form)
 
         basic_meta_group = QtWidgets.QGroupBox("基本属性")
-        basic_meta_layout = QtWidgets.QFormLayout(basic_meta_group)
+        basic_meta_layout = QtWidgets.QVBoxLayout(basic_meta_group)
+
+        self.basic_properties_table = QtWidgets.QTableWidget(8, 3)
+        self.basic_properties_table.setHorizontalHeaderLabels(["属性", "数值", "说明"])
+        self.basic_properties_table.verticalHeader().setVisible(False)
+        self.basic_properties_table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.basic_properties_table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        self.basic_properties_table.setFocusPolicy(QtCore.Qt.NoFocus)
+        self.basic_properties_table.setWordWrap(True)
+        self.basic_properties_table.horizontalHeader().setStretchLastSection(True)
+        self.basic_properties_table.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+        self.basic_properties_table.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
+        self.basic_properties_table.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
+        self.basic_properties_table.setAlternatingRowColors(True)
+        self.basic_properties_table.setMinimumHeight(220)
+        self.basic_properties_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #2a2a2a;
+                border: 1px solid #4b4b4b;
+                gridline-color: #4b4b4b;
+            }
+            QHeaderView::section {
+                background-color: #3e3e3e;
+                color: #e8e8e8;
+                border: 1px solid #4b4b4b;
+                padding: 3px;
+                font-weight: bold;
+            }
+            QTableWidget::item {
+                padding: 4px;
+            }
+        """)
+        basic_meta_layout.addWidget(self.basic_properties_table)
+
         self.prop_width_label = QtWidgets.QLabel("-")
         self.prop_height_label = QtWidgets.QLabel("-")
         self.prop_slice_count_label = QtWidgets.QLabel("-")
         self.prop_spacing_xyz_label = QtWidgets.QLabel("-")
         self.prop_format_label = QtWidgets.QLabel("-")
-        basic_meta_layout.addRow("宽度", self.prop_width_label)
-        basic_meta_layout.addRow("高度", self.prop_height_label)
-        basic_meta_layout.addRow("切片数", self.prop_slice_count_label)
-        basic_meta_layout.addRow("体素大小", self.prop_spacing_xyz_label)
-        basic_meta_layout.addRow("文件格式", self.prop_format_label)
+
         self.preview_thumb_label = QtWidgets.QLabel("预览")
         self.preview_thumb_label.setMinimumHeight(90)
         self.preview_thumb_label.setAlignment(QtCore.Qt.AlignCenter)
         self.preview_thumb_label.setStyleSheet("QLabel { background-color: #1f1f1f; border: 1px solid #4a4a4a; color: #888; }")
-        basic_meta_layout.addRow("预览", self.preview_thumb_label)
+        basic_meta_layout.addWidget(self.preview_thumb_label)
+
+        self.basic_properties_note = QtWidgets.QLabel(
+            "已选数据的更多信息可在图像属性面板中查看与调整。"
+        )
+        self.basic_properties_note.setWordWrap(True)
+        self.basic_properties_note.setStyleSheet(
+            "QLabel { background-color: #3b3f44; border: 1px solid #5a5a5a; border-radius: 4px; padding: 6px; color: #d7d7d7; }"
+        )
+        basic_meta_layout.addWidget(self.basic_properties_note)
+
+        self._update_basic_properties_table()
         property_layout.addWidget(basic_meta_group)
 
-        setting_group = QtWidgets.QGroupBox("2D 设置")
+        tools_group = QtWidgets.QGroupBox("工具")
+        tools_layout = QtWidgets.QVBoxLayout(tools_group)
+        tools_row_1 = QtWidgets.QHBoxLayout()
+        tool_distance_btn = QtWidgets.QPushButton("距离")
+        tool_distance_btn.clicked.connect(self.measure_distance)
+        tool_angle_btn = QtWidgets.QPushButton("角度")
+        tool_angle_btn.clicked.connect(self.measure_angle)
+        tools_row_1.addWidget(tool_distance_btn)
+        tools_row_1.addWidget(tool_angle_btn)
+        tools_layout.addLayout(tools_row_1)
+
+        tools_row_2 = QtWidgets.QHBoxLayout()
+        tool_export_btn = QtWidgets.QPushButton("导出")
+        tool_export_btn.clicked.connect(self.export_current_layer)
+        tool_remove_btn = QtWidgets.QPushButton("删除")
+        tool_remove_btn.clicked.connect(self.remove_selected_data)
+        tools_row_2.addWidget(tool_export_btn)
+        tools_row_2.addWidget(tool_remove_btn)
+        tools_layout.addLayout(tools_row_2)
+        property_layout.addWidget(tools_group)
+
+        setting_group = QtWidgets.QGroupBox("二维设置")
         setting_layout = QtWidgets.QVBoxLayout(setting_group)
         alpha_row = QtWidgets.QHBoxLayout()
         alpha_row.addWidget(QtWidgets.QLabel("透明度"))
@@ -1725,13 +1808,13 @@ class UIComponents:
         setting_layout.addLayout(alpha_row)
 
         lut_row = QtWidgets.QHBoxLayout()
-        lut_row.addWidget(QtWidgets.QLabel("2D LUT"))
+        lut_row.addWidget(QtWidgets.QLabel("二维 LUT"))
         self.lut_2d_combo = QtWidgets.QComboBox()
         self.lut_2d_combo.addItems(["grayscale", "hot", "bone", "jet"])
         lut_row.addWidget(self.lut_2d_combo)
         setting_layout.addLayout(lut_row)
 
-        self.chk_use_alpha_lut = QtWidgets.QCheckBox("使用 alpha LUT")
+        self.chk_use_alpha_lut = QtWidgets.QCheckBox("使用透明度 LUT")
         setting_layout.addWidget(self.chk_use_alpha_lut)
 
         interp_row = QtWidgets.QHBoxLayout()
@@ -1751,7 +1834,15 @@ class UIComponents:
         setting_layout.addWidget(self.chk_enable_interpolation)
         property_layout.addWidget(setting_group)
 
-        preset_group = QtWidgets.QGroupBox("3D 预设")
+        self.alpha_slider_2d.valueChanged.connect(self._on_2d_setting_changed)
+        self.lut_2d_combo.currentTextChanged.connect(self._on_2d_setting_changed)
+        self.chk_use_alpha_lut.toggled.connect(self._on_2d_setting_changed)
+        self.interp_2d_combo.currentTextChanged.connect(self._on_2d_setting_changed)
+        self.chk_sync_views.toggled.connect(self._on_sync_slices_toggled)
+        self.chk_show_overlay.toggled.connect(self._on_2d_setting_changed)
+        self.chk_enable_interpolation.toggled.connect(self._on_2d_setting_changed)
+
+        preset_group = QtWidgets.QGroupBox("三维预设")
         preset_layout = QtWidgets.QGridLayout(preset_group)
         preset_layout.setSpacing(4)
         preset_defs = ["骨骼", "血管", "CTA", "软组织", "高对比", "低噪声"]
@@ -1762,45 +1853,112 @@ class UIComponents:
             preset_layout.addWidget(btn, idx // 3, idx % 3)
         property_layout.addWidget(preset_group)
 
-        setting3d_group = QtWidgets.QGroupBox("3D 设置")
+        setting3d_group = QtWidgets.QGroupBox("三维设置")
         setting3d_layout = QtWidgets.QVBoxLayout(setting3d_group)
+
         opacity3d_row = QtWidgets.QHBoxLayout()
-        opacity3d_row.addWidget(QtWidgets.QLabel("透明度"))
+        opacity3d_row.addWidget(QtWidgets.QLabel("实心度"))
         self.opacity_3d_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
         self.opacity_3d_slider.setRange(0, 100)
         self.opacity_3d_slider.setValue(80)
         opacity3d_row.addWidget(self.opacity_3d_slider)
         setting3d_layout.addLayout(opacity3d_row)
 
-        self.chk_absolute_lut = QtWidgets.QCheckBox("绝对 LUT")
-        self.chk_flip_roi_lut = QtWidgets.QCheckBox("Flip ROI LUT")
-        self.chk_gamma_enhance = QtWidgets.QCheckBox("伽马增强")
-        self.chk_stereo_interp = QtWidgets.QCheckBox("立体插值")
-        setting3d_layout.addWidget(self.chk_absolute_lut)
-        setting3d_layout.addWidget(self.chk_flip_roi_lut)
-        setting3d_layout.addWidget(self.chk_gamma_enhance)
-        setting3d_layout.addWidget(self.chk_stereo_interp)
+        diffuse_row = QtWidgets.QHBoxLayout()
+        diffuse_row.addWidget(QtWidgets.QLabel("漫反射"))
+        self.diffuse_3d_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.diffuse_3d_slider.setRange(0, 100)
+        self.diffuse_3d_slider.setValue(75)
+        diffuse_row.addWidget(self.diffuse_3d_slider)
+        setting3d_layout.addLayout(diffuse_row)
 
-        self.chk_3d_shading = QtWidgets.QCheckBox("高质量渲染")
+        specular_row = QtWidgets.QHBoxLayout()
+        specular_row.addWidget(QtWidgets.QLabel("高光"))
+        self.specular_3d_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.specular_3d_slider.setRange(0, 100)
+        self.specular_3d_slider.setValue(20)
+        specular_row.addWidget(self.specular_3d_slider)
+        setting3d_layout.addLayout(specular_row)
+
+        shininess_row = QtWidgets.QHBoxLayout()
+        shininess_row.addWidget(QtWidgets.QLabel("光泽度"))
+        self.shininess_3d_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.shininess_3d_slider.setRange(1, 100)
+        self.shininess_3d_slider.setValue(35)
+        shininess_row.addWidget(self.shininess_3d_slider)
+        setting3d_layout.addLayout(shininess_row)
+
+        self.chk_tone_mapping = QtWidgets.QCheckBox("色调映射")
+        self.chk_unsharp = QtWidgets.QCheckBox("反锐化")
+        self.chk_specular_boost = QtWidgets.QCheckBox("高光增强")
+        self.chk_noise_reduction = QtWidgets.QCheckBox("降噪")
+        self.chk_3d_edge_enhance = QtWidgets.QCheckBox("边缘对比")
+        self.chk_filtered_gradient = QtWidgets.QCheckBox("平滑梯度")
+        self.chk_3d_shading = QtWidgets.QCheckBox("高质量")
         self.chk_3d_shading.setChecked(True)
-        self.chk_3d_edge_enhance = QtWidgets.QCheckBox("边缘增强")
-        self.chk_3d_hard_gradient = QtWidgets.QCheckBox("Hard gradient")
-        self.chk_3d_gradient = QtWidgets.QCheckBox("梯度增强")
-        self.chk_3d_gradient.setChecked(True)
-        setting3d_layout.addWidget(self.chk_3d_shading)
+        self.chk_median_3d = QtWidgets.QCheckBox("中值平滑")
+        self.chk_3d_hard_gradient = self.chk_unsharp
+        self.chk_3d_gradient = self.chk_filtered_gradient
+        self.chk_3d_gradient.setChecked(False)
+
+        setting3d_layout.addWidget(self.chk_tone_mapping)
+        setting3d_layout.addWidget(self.chk_unsharp)
+        setting3d_layout.addWidget(self.chk_specular_boost)
+        setting3d_layout.addWidget(self.chk_noise_reduction)
         setting3d_layout.addWidget(self.chk_3d_edge_enhance)
-        setting3d_layout.addWidget(self.chk_3d_hard_gradient)
-        setting3d_layout.addWidget(self.chk_3d_gradient)
+        setting3d_layout.addWidget(self.chk_filtered_gradient)
+        setting3d_layout.addWidget(self.chk_3d_shading)
+        setting3d_layout.addWidget(self.chk_median_3d)
+
+        render3d_row = QtWidgets.QHBoxLayout()
+        render3d_row.addWidget(QtWidgets.QLabel("渲染模式"))
+        self.render_mode_3d_combo = QtWidgets.QComboBox()
+        self.render_mode_3d_combo.addItems(["默认", "MIP", "MinIP", "ISO", "体渲染"])
+        render3d_row.addWidget(self.render_mode_3d_combo)
+        setting3d_layout.addLayout(render3d_row)
+
+        interpolation3d_row = QtWidgets.QHBoxLayout()
+        interpolation3d_row.addWidget(QtWidgets.QLabel("插值方式"))
+        self.interp_3d_combo = QtWidgets.QComboBox()
+        self.interp_3d_combo.addItems(["最近邻", "线性", "三次"])
+        interpolation3d_row.addWidget(self.interp_3d_combo)
+        setting3d_layout.addLayout(interpolation3d_row)
 
         lut3d_row = QtWidgets.QHBoxLayout()
-        lut3d_row.addWidget(QtWidgets.QLabel("3D LUT"))
+        lut3d_row.addWidget(QtWidgets.QLabel("三维 LUT"))
         self.lut_3d_combo = QtWidgets.QComboBox()
         self.lut_3d_combo.addItems(["grayscale", "bone", "coolwarm"])
         lut3d_row.addWidget(self.lut_3d_combo)
         setting3d_layout.addLayout(lut3d_row)
+
+        self.chk_absolute_lut = QtWidgets.QCheckBox("绝对值 LUT")
+        self.chk_flip_roi_lut = QtWidgets.QCheckBox("反转 LUT 映射")
+        self.chk_gamma_enhance = QtWidgets.QCheckBox("伽马增强")
+        setting3d_layout.addWidget(self.chk_absolute_lut)
+        setting3d_layout.addWidget(self.chk_flip_roi_lut)
+        setting3d_layout.addWidget(self.chk_gamma_enhance)
         property_layout.addWidget(setting3d_group)
 
-        extension_group = QtWidgets.QGroupBox("扩展")
+        self.opacity_3d_slider.valueChanged.connect(self.apply_advanced_3d_settings)
+        self.diffuse_3d_slider.valueChanged.connect(self.apply_advanced_3d_settings)
+        self.specular_3d_slider.valueChanged.connect(self.apply_advanced_3d_settings)
+        self.shininess_3d_slider.valueChanged.connect(self.apply_advanced_3d_settings)
+        self.chk_tone_mapping.toggled.connect(self.apply_advanced_3d_settings)
+        self.chk_unsharp.toggled.connect(self.apply_advanced_3d_settings)
+        self.chk_specular_boost.toggled.connect(self.apply_advanced_3d_settings)
+        self.chk_noise_reduction.toggled.connect(self.apply_advanced_3d_settings)
+        self.chk_3d_edge_enhance.toggled.connect(self.apply_advanced_3d_settings)
+        self.chk_filtered_gradient.toggled.connect(self.apply_advanced_3d_settings)
+        self.chk_3d_shading.toggled.connect(self.apply_advanced_3d_settings)
+        self.chk_median_3d.toggled.connect(self.apply_advanced_3d_settings)
+        self.interp_3d_combo.currentTextChanged.connect(self.apply_advanced_3d_settings)
+        self.lut_3d_combo.currentTextChanged.connect(self.apply_advanced_3d_settings)
+        self.chk_absolute_lut.toggled.connect(self.apply_advanced_3d_settings)
+        self.chk_flip_roi_lut.toggled.connect(self.apply_advanced_3d_settings)
+        self.chk_gamma_enhance.toggled.connect(self.apply_advanced_3d_settings)
+        self.render_mode_3d_combo.currentTextChanged.connect(self.on_render_mode_changed)
+
+        extension_group = QtWidgets.QGroupBox("裁剪")
         extension_layout = QtWidgets.QFormLayout(extension_group)
         self.chk_axis_equalize = QtWidgets.QCheckBox("均摊(X/Y/Z)")
         distance_btn = QtWidgets.QPushButton("距离")
@@ -1820,13 +1978,22 @@ class UIComponents:
         extension_layout.addRow(crop_preview_btn)
         property_layout.addWidget(extension_group)
         
-        # 右侧折叠面板布局（更接近专业软件）
-        right_toolbox = QtWidgets.QToolBox()
-        right_toolbox.addItem(data_list_panel, "数据属性和设定")
-        right_toolbox.addItem(property_panel, "属性设置")
-        right_toolbox.addItem(histogram_panel, "灰度直方图")
-        right_toolbox.setCurrentIndex(0)
-        right_panel_layout.addWidget(right_toolbox, 1)
+        # 右侧单页滚动布局（更接近参考界面）
+        right_scroll = QtWidgets.QScrollArea()
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+
+        right_scroll_content = QtWidgets.QWidget()
+        right_scroll_layout = QtWidgets.QVBoxLayout(right_scroll_content)
+        right_scroll_layout.setContentsMargins(2, 2, 2, 2)
+        right_scroll_layout.setSpacing(6)
+        right_scroll_layout.addWidget(data_list_panel)
+        right_scroll_layout.addWidget(property_panel)
+        right_scroll_layout.addWidget(histogram_panel)
+        right_scroll_layout.addStretch()
+
+        right_scroll.setWidget(right_scroll_content)
+        right_panel_layout.addWidget(right_scroll, 1)
         
         # 将右侧面板添加到主分割器
         main_splitter.addWidget(self.right_panel)
@@ -1838,7 +2005,7 @@ class UIComponents:
         
         # 设置初始分割比例
         total_width = 1600  # 假设的总宽度
-        main_splitter.setSizes([200, 1120, 280])  # 左侧:中间:右侧 的比例
+        main_splitter.setSizes([200, 1080, 320])  # 左侧:中间:右侧 的比例
         
         # 使用QMainWindow的setCentralWidget方法设置中心部件
         self.setCentralWidget(main_splitter)
@@ -1857,11 +2024,11 @@ class UIComponents:
         """)
         
         # 创建状态栏标签
-        self.status_label = QtWidgets.QLabel("Current state: 跟踪 (Left mouse)")
+        self.status_label = QtWidgets.QLabel("当前状态：跟踪（左键）")
         self.status_label.setStyleSheet("color: #d8d8d8; padding: 0 10px;")
         self.status_bar.addWidget(self.status_label, 1)  # stretch factor = 1
 
-        self.new_session_btn = QtWidgets.QPushButton("新建Session...")
+        self.new_session_btn = QtWidgets.QPushButton("新建会话...")
         self.new_session_btn.setMinimumHeight(22)
         self.new_session_btn.clicked.connect(self.start_new_session)
         self.status_bar.addPermanentWidget(self.new_session_btn)
@@ -1907,28 +2074,28 @@ class UIComponents:
             }
         """
 
-        # 左上：3D View
-        view3d_placeholder = QtWidgets.QLabel("3D View\n三维体渲染")
+        # 左上：三维视图
+        view3d_placeholder = QtWidgets.QLabel("三维视图\n三维体渲染")
         view3d_placeholder.setAlignment(QtCore.Qt.AlignCenter)
         view3d_placeholder.setStyleSheet(
-            "QLabel { background-color: #4a0000; border: 1px solid #5f2b2b; color: #d2d2d2; border-radius: 8px; font-size: 14pt; }"
+            "QLabel { background-color: #151515; border: 1px solid #3f3f3f; color: #d2d2d2; border-radius: 8px; font-size: 14pt; }"
         )
         self.grid_layout.addWidget(view3d_placeholder, 0, 0)
 
         # 右上：Coronal
-        coronal_placeholder = QtWidgets.QLabel("Coronal\n冠状面")
+        coronal_placeholder = QtWidgets.QLabel("冠状面")
         coronal_placeholder.setAlignment(QtCore.Qt.AlignCenter)
         coronal_placeholder.setStyleSheet(placeholder_style)
         self.grid_layout.addWidget(coronal_placeholder, 0, 1)
 
         # 左下：Axial
-        axial_placeholder = QtWidgets.QLabel("Axial\n轴位面")
+        axial_placeholder = QtWidgets.QLabel("轴位面")
         axial_placeholder.setAlignment(QtCore.Qt.AlignCenter)
         axial_placeholder.setStyleSheet(placeholder_style)
         self.grid_layout.addWidget(axial_placeholder, 1, 0)
 
         # 右下：Sagittal
-        sagittal_placeholder = QtWidgets.QLabel("Sagittal\n矢状面")
+        sagittal_placeholder = QtWidgets.QLabel("矢状面")
         sagittal_placeholder.setAlignment(QtCore.Qt.AlignCenter)
         sagittal_placeholder.setStyleSheet(placeholder_style)
         self.grid_layout.addWidget(sagittal_placeholder, 1, 1)
@@ -2458,7 +2625,7 @@ class UIComponents:
         if hasattr(self, 'wl_value'):
             self.wl_value.setText(str(int(self.window_level)))
         if hasattr(self, 'prop_window_label'):
-            self.prop_window_label.setText(f"W: {int(self.window_width)}, L: {int(self.window_level)}")
+            self.prop_window_label.setText(f"窗宽: {int(self.window_width)}, 窗位: {int(self.window_level)}")
         if update_views and hasattr(self, 'update_all_views'):
             self.update_all_views()
 
@@ -2536,17 +2703,17 @@ class UIComponents:
                 self.statusBar().showMessage("区域自动窗调平已关闭", 2000)
 
     def toggle_move_tool(self, checked):
-        """切换Move工具（2D视图左键平移、右键旋转）"""
+        """切换移动工具（2D视图左键平移、右键旋转）"""
         self.move_tool_enabled = bool(checked)
         if checked:
             if hasattr(self, 'statusBar'):
-                self.statusBar().showMessage("Move工具已启用：左键平移，右键旋转")
+                self.statusBar().showMessage("移动工具已启用：左键平移，右键旋转")
         else:
             if hasattr(self, 'statusBar'):
-                self.statusBar().showMessage("Move工具已关闭", 2000)
+                self.statusBar().showMessage("移动工具已关闭", 2000)
 
     def undo_move_tool(self):
-        """撤销当前活动视图的Move变换"""
+        """撤销当前活动视图的移动变换"""
         viewer_map = {
             'axial': getattr(self, 'axial_viewer', None),
             'sagittal': getattr(self, 'sag_viewer', None),
@@ -2557,7 +2724,12 @@ class UIComponents:
         if viewer is not None and hasattr(viewer, 'undo_move_transform'):
             viewer.undo_move_transform()
             if hasattr(self, 'statusBar'):
-                self.statusBar().showMessage(f"已撤销 {active} 视图上一步Move操作", 2000)
+                active_label = {
+                    'axial': '轴位',
+                    'sagittal': '矢状位',
+                    'coronal': '冠状位'
+                }.get(active, active)
+                self.statusBar().showMessage(f"已撤销 {active_label} 视图上一步移动操作", 2000)
     
     def _update_status_bar(self, data_min, data_max, data_mean, data_std):
         """
@@ -2581,7 +2753,7 @@ class UIComponents:
     def add_data_to_list(self, data_name, data_item):
         """
         向数据列表中添加新的数据项
-        确保每次只有一个复选框被选中
+        每条数据对应一个带小眼睛按钮的行
         
         参数
         ----
@@ -2590,81 +2762,199 @@ class UIComponents:
         data_item : dict
             数据项，包含image, array, spacing等信息
         """
-        # 临时断开信号，避免触发多次切换
-        try:
-            self.data_list_widget.itemChanged.disconnect(self.on_data_item_changed)
-        except:
-            pass  # 如果信号未连接，忽略错误
-        
-        # 取消所有现有项的选中状态（单选机制）
-        for i in range(self.data_list_widget.count()):
-            existing_item = self.data_list_widget.item(i)
-            existing_item.setCheckState(QtCore.Qt.Unchecked)
-        
         # 创建新列表项
-        list_item = QtWidgets.QListWidgetItem()
-        list_item.setFlags(list_item.flags() | QtCore.Qt.ItemIsUserCheckable)
-        list_item.setCheckState(QtCore.Qt.Checked)  # 新添加的数据默认勾选
-        list_item.setText(data_name)
+        list_item = QtWidgets.QListWidgetItem(data_name)
+        list_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
         
         # 将数据信息存储到item中
         list_item.setData(QtCore.Qt.UserRole, data_item)
+        list_item.setData(QtCore.Qt.UserRole + 1, True)  # visible
         
         # 添加到列表
         self.data_list_widget.addItem(list_item)
+        item_widget = self._build_dataset_list_item_widget(list_item, data_name)
+        list_item.setSizeHint(item_widget.sizeHint())
+        self.data_list_widget.setItemWidget(list_item, item_widget)
+        self.data_list_widget.setCurrentItem(list_item)
+        self.switch_to_data(data_item, data_name)
         
-        # 重新连接信号
-        self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
-        
-        print(f"数据已添加到列表: {data_name} (已自动选中)")
+        print(f"数据已添加到列表: {data_name} (已自动显示)")
     
-    def on_data_item_changed(self, item):
+    def _build_dataset_list_item_widget(self, item, data_name):
+        row_widget = QtWidgets.QWidget()
+        row_layout = QtWidgets.QHBoxLayout(row_widget)
+        row_layout.setContentsMargins(4, 2, 4, 2)
+        row_layout.setSpacing(6)
+
+        eye_btn = QtWidgets.QToolButton(row_widget)
+        eye_btn.setFixedWidth(24)
+        eye_btn.clicked.connect(lambda _, list_item=item: self._toggle_dataset_item_visibility(list_item))
+        row_layout.addWidget(eye_btn)
+
+        name_label = QtWidgets.QLabel(data_name, row_widget)
+        name_label.setAlignment(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft)
+        row_layout.addWidget(name_label, 1)
+
+        item.setData(QtCore.Qt.UserRole + 2, eye_btn)
+        item.setData(QtCore.Qt.UserRole + 3, name_label)
+        self._refresh_dataset_item_eye(item)
+        return row_widget
+
+    def _refresh_dataset_item_eye(self, item):
+        eye_btn = item.data(QtCore.Qt.UserRole + 2)
+        if eye_btn is None:
+            return
+        visible = bool(item.data(QtCore.Qt.UserRole + 1))
+        eye_btn.setText("👁" if visible else "○")
+        eye_btn.setToolTip("隐藏数据" if visible else "显示数据")
+
+    def on_data_selection_changed(self, current, previous):
         """
-        当数据项的复选框状态改变时调用
-        确保每次只能选中一个复选框
+        当数据项选中行变化时切换显示
         
         参数
         ----
-        item : QListWidgetItem
-            状态改变的列表项
+        current : QListWidgetItem
+            当前选中的列表项
+        previous : QListWidgetItem
+            之前选中的列表项
         """
-        data_name = item.text()
-        is_checked = item.checkState() == QtCore.Qt.Checked
-        
-        if is_checked:
-            # 临时断开信号，避免递归调用
-            self.data_list_widget.itemChanged.disconnect(self.on_data_item_changed)
-            
-            # 取消其他项的选中状态（单选机制）
-            for i in range(self.data_list_widget.count()):
-                other_item = self.data_list_widget.item(i)
-                if other_item != item and other_item.checkState() == QtCore.Qt.Checked:
-                    other_item.setCheckState(QtCore.Qt.Unchecked)
-            
-            # 重新连接信号
-            self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
-            
-            # 切换到选中的数据
-            data_item = item.data(QtCore.Qt.UserRole)
-            self.switch_to_data(data_item, data_name)
-            print(f"切换到数据: {data_name}")
-        
+        if current is None:
+            return
+        if not bool(current.data(QtCore.Qt.UserRole + 1)):
+            return
+        data_item = current.data(QtCore.Qt.UserRole)
+        if data_item is None:
+            return
+        self.switch_to_data(data_item, current.text())
+        print(f"切换到数据: {current.text()}")
+
+    def _on_2d_setting_changed(self, *_):
+        self.apply_2d_settings_to_viewers(refresh_slices=True)
+
+    def _on_sync_slices_toggled(self, checked):
+        if checked:
+            self._slice_positions_before_sync = {
+                'axial': getattr(getattr(self, 'axial_viewer', None), 'slider', None).value() if getattr(self, 'axial_viewer', None) else None,
+                'sagittal': getattr(getattr(self, 'sag_viewer', None), 'slider', None).value() if getattr(self, 'sag_viewer', None) else None,
+                'coronal': getattr(getattr(self, 'cor_viewer', None), 'slider', None).value() if getattr(self, 'cor_viewer', None) else None,
+            }
+        self._setup_slice_sync_connections()
+        if checked:
+            self._sync_other_slices_from('axial', getattr(getattr(self, 'axial_viewer', None), 'slider', None).value() if getattr(self, 'axial_viewer', None) else 0)
         else:
-            # 如果试图取消选中当前项，检查是否还有其他选中项
-            has_other_checked = False
-            for i in range(self.data_list_widget.count()):
-                other_item = self.data_list_widget.item(i)
-                if other_item != item and other_item.checkState() == QtCore.Qt.Checked:
-                    has_other_checked = True
-                    break
-            
-            # 如果没有其他选中项，强制保持当前项选中（至少要有一个数据被选中）
-            if not has_other_checked:
-                # 临时断开信号，避免递归调用
-                self.data_list_widget.itemChanged.disconnect(self.on_data_item_changed)
-                item.setCheckState(QtCore.Qt.Checked)
-                self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
-                print(f"至少需要选中一个数据项，保持 '{data_name}' 为选中状态")
+            old_pos = getattr(self, '_slice_positions_before_sync', None)
+            if isinstance(old_pos, dict):
+                self._syncing_slice_sliders = True
+                try:
+                    mapping = {
+                        'axial': getattr(self, 'axial_viewer', None),
+                        'sagittal': getattr(self, 'sag_viewer', None),
+                        'coronal': getattr(self, 'cor_viewer', None),
+                    }
+                    for key, viewer in mapping.items():
+                        if viewer is None or not hasattr(viewer, 'slider'):
+                            continue
+                        value = old_pos.get(key, None)
+                        if value is None:
+                            continue
+                        viewer.slider.setValue(max(0, min(viewer.max_index - 1, int(value))))
+                finally:
+                    self._syncing_slice_sliders = False
+
+    def _setup_slice_sync_connections(self):
+        viewers = {
+            'axial': getattr(self, 'axial_viewer', None),
+            'sagittal': getattr(self, 'sag_viewer', None),
+            'coronal': getattr(self, 'cor_viewer', None),
+        }
+        for name, viewer in viewers.items():
+            if viewer is None or not hasattr(viewer, 'slider'):
+                continue
+            try:
+                while True:
+                    if name == 'axial':
+                        viewer.slider.valueChanged.disconnect(self._on_axial_slice_changed)
+                    elif name == 'sagittal':
+                        viewer.slider.valueChanged.disconnect(self._on_sagittal_slice_changed)
+                    else:
+                        viewer.slider.valueChanged.disconnect(self._on_coronal_slice_changed)
+            except Exception:
+                pass
+
+            if hasattr(self, 'chk_sync_views') and self.chk_sync_views.isChecked():
+                if name == 'axial':
+                    viewer.slider.valueChanged.connect(self._on_axial_slice_changed)
+                elif name == 'sagittal':
+                    viewer.slider.valueChanged.connect(self._on_sagittal_slice_changed)
+                else:
+                    viewer.slider.valueChanged.connect(self._on_coronal_slice_changed)
+
+    def _on_axial_slice_changed(self, value):
+        self._sync_other_slices_from('axial', value)
+
+    def _on_sagittal_slice_changed(self, value):
+        self._sync_other_slices_from('sagittal', value)
+
+    def _on_coronal_slice_changed(self, value):
+        self._sync_other_slices_from('coronal', value)
+
+    def _sync_other_slices_from(self, source_name, source_value):
+        if not hasattr(self, 'chk_sync_views') or not self.chk_sync_views.isChecked():
+            return
+        if getattr(self, '_syncing_slice_sliders', False):
+            return
+
+        viewer_map = {
+            'axial': getattr(self, 'axial_viewer', None),
+            'sagittal': getattr(self, 'sag_viewer', None),
+            'coronal': getattr(self, 'cor_viewer', None),
+        }
+        source_viewer = viewer_map.get(source_name)
+        if source_viewer is None or source_viewer.max_index <= 1:
+            return
+
+        ratio = float(source_value) / float(max(1, source_viewer.max_index - 1))
+
+        self._syncing_slice_sliders = True
+        try:
+            for name, viewer in viewer_map.items():
+                if name == source_name or viewer is None or not hasattr(viewer, 'slider'):
+                    continue
+                target = int(round(ratio * max(1, viewer.max_index - 1)))
+                target = max(0, min(viewer.max_index - 1, target))
+                if viewer.slider.value() != target:
+                    viewer.slider.setValue(target)
+        finally:
+            self._syncing_slice_sliders = False
+
+    def apply_2d_settings_to_viewers(self, refresh_slices=True):
+        viewers = [
+            getattr(self, 'axial_viewer', None),
+            getattr(self, 'sag_viewer', None),
+            getattr(self, 'cor_viewer', None),
+        ]
+        alpha_value = self.alpha_slider_2d.value() if hasattr(self, 'alpha_slider_2d') else 100
+        overlay_visible = self.chk_show_overlay.isChecked() if hasattr(self, 'chk_show_overlay') else True
+        interpolation_enabled = self.chk_enable_interpolation.isChecked() if hasattr(self, 'chk_enable_interpolation') else True
+        interpolation_mode = self.interp_2d_combo.currentText() if hasattr(self, 'interp_2d_combo') else "线性"
+
+        for viewer in viewers:
+            if viewer is None:
+                continue
+            if hasattr(viewer, 'set_slice_opacity'):
+                viewer.set_slice_opacity(alpha_value)
+            if hasattr(viewer, 'set_overlay_visible'):
+                viewer.set_overlay_visible(overlay_visible)
+            if hasattr(viewer, 'set_interpolation_settings'):
+                viewer.set_interpolation_settings(interpolation_enabled, interpolation_mode)
+
+            if refresh_slices and hasattr(viewer, 'slider'):
+                viewer.update_slice(viewer.slider.value())
+
+    def _on_2d_viewers_created(self):
+        self._setup_slice_sync_connections()
+        self.apply_2d_settings_to_viewers(refresh_slices=True)
     
     def switch_to_data(self, data_item, data_name):
         """
@@ -2717,7 +3007,9 @@ class UIComponents:
             if hasattr(self, 'prop_slice_count_label'):
                 self.prop_slice_count_label.setText(str(self.depth_z))
             if hasattr(self, 'prop_format_label'):
-                self.prop_format_label.setText("Volume")
+                self.prop_format_label.setText("体数据")
+            if hasattr(self, '_update_basic_properties_table'):
+                self._update_basic_properties_table()
             
             # 重新创建视图
             data_max = float(self.array.max())
@@ -2773,7 +3065,7 @@ class UIComponents:
                 # 创建三维体渲染视图
                 self.volume_viewer = VolumeViewer(self.array, self.spacing, simplified=True, downsample_factor=1)
                 if hasattr(self.volume_viewer, 'set_background_color'):
-                    self.volume_viewer.set_background_color((0.45, 0.08, 0.08))
+                    self.volume_viewer.set_background_color((0.08, 0.08, 0.10))
                 if hasattr(self, 'apply_current_3d_controls'):
                     self.apply_current_3d_controls()
                 
@@ -2789,15 +3081,18 @@ class UIComponents:
                 self.grid_layout.addWidget(self.sag_viewer, 1, 1)
                 
                 # 在左上角显示提示信息
-                info_label = QtWidgets.QLabel("3D视图不可用\n(数据全为0)")
+                info_label = QtWidgets.QLabel("三维视图不可用\n(数据全为0)")
                 info_label.setAlignment(QtCore.Qt.AlignCenter)
-                info_label.setStyleSheet("QLabel { background-color: #4a0000; color: #d0d0d0; font-size: 14pt; }")
+                info_label.setStyleSheet("QLabel { background-color: #151515; border: 1px solid #3f3f3f; color: #d0d0d0; font-size: 14pt; }")
                 self.grid_layout.addWidget(info_label, 0, 0)
+
+            if hasattr(self, '_on_2d_viewers_created'):
+                self._on_2d_viewers_created()
 
             self.active_view = 'axial'
             
             # 更新窗口标题
-            self.setWindowTitle(f"CT Viewer - {data_name}")
+            self.setWindowTitle(f"工业CT智能软件 - {data_name}")
             
             # 初始化窗宽窗位
             if hasattr(self, 'reset_window_level'):
@@ -2815,7 +3110,7 @@ class UIComponents:
                     self.update_all_views()
 
             if hasattr(self, 'prop_window_label'):
-                self.prop_window_label.setText(f"W: {int(self.window_width)}, L: {int(self.window_level)}")
+                self.prop_window_label.setText(f"窗宽: {int(self.window_width)}, 窗位: {int(self.window_level)}")
             
             # 更新灰度直方图
             if hasattr(self, 'update_histogram'):
@@ -2839,7 +3134,7 @@ class UIComponents:
             return
 
         data_name = current_item.text()
-        is_checked = current_item.checkState() == QtCore.Qt.Checked  # 是否正在显示
+        deleting_current = (self.data_list_widget.currentItem() is current_item)
 
         reply = QtWidgets.QMessageBox.question(
             self, '确认删除',
@@ -2852,33 +3147,20 @@ class UIComponents:
 
         row = self.data_list_widget.row(current_item)
 
-        # 临时断开信号
-        try:
-            self.data_list_widget.itemChanged.disconnect(self.on_data_item_changed)
-        except:
-            pass
-
         # 删除项
         self.data_list_widget.takeItem(row)
         print(f"已删除数据: {data_name}")
 
         remaining = self.data_list_widget.count()
 
-        if remaining > 0 and is_checked:
+        if remaining > 0 and deleting_current:
             # 删除的是当前显示的数据 → 自动切换到第一个
-            for i in range(remaining):
-                self.data_list_widget.item(i).setCheckState(QtCore.Qt.Unchecked)
             first_item = self.data_list_widget.item(0)
-            first_item.setCheckState(QtCore.Qt.Checked)
-            self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
+            self.data_list_widget.setCurrentItem(first_item)
             data_item = first_item.data(QtCore.Qt.UserRole)
             self.switch_to_data(data_item, first_item.text())
-        elif remaining > 0:
-            # 删除的不是当前显示的数据 → 无需切换
-            self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
         else:
             # 列表已空 → 清理全部状态
-            self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
             self._reset_after_all_data_removed()
 
     def clear_all_data(self):
@@ -2895,14 +3177,7 @@ class UIComponents:
         if reply != QtWidgets.QMessageBox.Yes:
             return
 
-        try:
-            self.data_list_widget.itemChanged.disconnect(self.on_data_item_changed)
-        except:
-            pass
-
         self.data_list_widget.clear()
-
-        self.data_list_widget.itemChanged.connect(self.on_data_item_changed)
         self._reset_after_all_data_removed()
         print("已清空所有数据")
 
@@ -2945,7 +3220,9 @@ class UIComponents:
         if hasattr(self, 'prop_type_label'):
             self.prop_type_label.setText("-")
         if hasattr(self, 'prop_window_label'):
-            self.prop_window_label.setText("W: -, L: -")
+            self.prop_window_label.setText("窗宽: -, 窗位: -")
+        if hasattr(self, '_update_basic_properties_table'):
+            self._update_basic_properties_table()
 
         print("所有数据已移除，状态已重置")
 
@@ -3166,9 +3443,48 @@ class UIComponents:
         QtWidgets.QMessageBox.information(self, "文本注释", "文本注释入口已预留。")
 
     def on_render_mode_changed(self, mode):
+        if hasattr(self, 'render_mode_3d_combo') and self.render_mode_3d_combo.currentText() != mode:
+            self.render_mode_3d_combo.blockSignals(True)
+            self.render_mode_3d_combo.setCurrentText(mode)
+            self.render_mode_3d_combo.blockSignals(False)
+        if hasattr(self, 'render_mode_combo') and self.render_mode_combo.currentText() != mode:
+            self.render_mode_combo.blockSignals(True)
+            self.render_mode_combo.setCurrentText(mode)
+            self.render_mode_combo.blockSignals(False)
+
         if self.volume_viewer and hasattr(self.volume_viewer, 'set_render_mode'):
             self.volume_viewer.set_render_mode(mode)
+            self.apply_advanced_3d_settings()
             self.statusBar().showMessage(f"3D渲染模式：{mode}", 1500)
+
+    def apply_advanced_3d_settings(self, *_):
+        """应用3D settings面板中的高级参数。"""
+        if self.volume_viewer is None or not hasattr(self.volume_viewer, 'configure_advanced_3d'):
+            return
+
+        self.volume_viewer.configure_advanced_3d(
+            solidity=self.opacity_3d_slider.value() if hasattr(self, 'opacity_3d_slider') else 80,
+            diffuse=self.diffuse_3d_slider.value() if hasattr(self, 'diffuse_3d_slider') else 75,
+            specular=self.specular_3d_slider.value() if hasattr(self, 'specular_3d_slider') else 20,
+            shininess=self.shininess_3d_slider.value() if hasattr(self, 'shininess_3d_slider') else 35,
+            tone_mapping=self.chk_tone_mapping.isChecked() if hasattr(self, 'chk_tone_mapping') else False,
+            unsharp=self.chk_unsharp.isChecked() if hasattr(self, 'chk_unsharp') else False,
+            specular_boost=self.chk_specular_boost.isChecked() if hasattr(self, 'chk_specular_boost') else False,
+            noise_reduction=self.chk_noise_reduction.isChecked() if hasattr(self, 'chk_noise_reduction') else False,
+            edge_contrast=self.chk_3d_edge_enhance.isChecked() if hasattr(self, 'chk_3d_edge_enhance') else False,
+            filtered_gradient=self.chk_filtered_gradient.isChecked() if hasattr(self, 'chk_filtered_gradient') else False,
+            high_quality=self.chk_3d_shading.isChecked() if hasattr(self, 'chk_3d_shading') else True,
+            median=self.chk_median_3d.isChecked() if hasattr(self, 'chk_median_3d') else False,
+            interpolation_3d=(
+                'Nearest' if (hasattr(self, 'interp_3d_combo') and self.interp_3d_combo.currentText() == '最近邻')
+                else 'Cubic' if (hasattr(self, 'interp_3d_combo') and self.interp_3d_combo.currentText() == '三次')
+                else 'Linear'
+            ),
+            lut_3d=self.lut_3d_combo.currentText() if hasattr(self, 'lut_3d_combo') else 'grayscale',
+            absolute_lut=self.chk_absolute_lut.isChecked() if hasattr(self, 'chk_absolute_lut') else False,
+            flip_roi_lut=self.chk_flip_roi_lut.isChecked() if hasattr(self, 'chk_flip_roi_lut') else False,
+            gamma_enhance=self.chk_gamma_enhance.isChecked() if hasattr(self, 'chk_gamma_enhance') else False,
+        )
 
     def change_background_color(self):
         color = QtWidgets.QColorDialog.getColor(parent=self)
@@ -3251,6 +3567,52 @@ class UIComponents:
     def export_segmentation_model(self):
         QtWidgets.QMessageBox.information(self, "导出模型", "模型导出入口已启用。")
 
+    def _filter_dataset_items(self):
+        """按关键字过滤数据列表（简单版）。"""
+        if not hasattr(self, 'data_list_widget'):
+            return
+        keyword, ok = QtWidgets.QInputDialog.getText(self, "过滤数据项", "输入名称关键字（留空显示全部）:")
+        if not ok:
+            return
+        text = (keyword or "").strip().lower()
+        for index in range(self.data_list_widget.count()):
+            item = self.data_list_widget.item(index)
+            visible = (text == "") or (text in item.text().lower())
+            item.setHidden(not visible)
+
+    def _toggle_current_dataset_visibility(self):
+        """切换当前数据项显示状态（行内小眼睛）。"""
+        if not hasattr(self, 'data_list_widget'):
+            return
+        current_item = self.data_list_widget.currentItem()
+        if current_item is None:
+            QtWidgets.QMessageBox.information(self, "提示", "请先在数据列表中选中一项。")
+            return
+        self._toggle_dataset_item_visibility(current_item)
+
+    def _toggle_dataset_item_visibility(self, item):
+        if item is None:
+            return
+        current_visible = bool(item.data(QtCore.Qt.UserRole + 1))
+        new_visible = not current_visible
+        item.setData(QtCore.Qt.UserRole + 1, new_visible)
+        self._refresh_dataset_item_eye(item)
+
+        if self.data_list_widget.currentItem() is item:
+            if new_visible:
+                data_item = item.data(QtCore.Qt.UserRole)
+                if data_item is not None:
+                    self.switch_to_data(data_item, item.text())
+            else:
+                self.clear_viewers()
+                self.create_placeholder_views()
+
+        if hasattr(self, 'status_bar'):
+            self.status_bar.showMessage(
+                f"数据 {item.text()} 已{'显示' if new_visible else '隐藏'}",
+                2000
+            )
+
     def create_new_layer(self):
         QtWidgets.QMessageBox.information(self, "新建图层", "新建图层入口已启用。")
 
@@ -3275,6 +3637,8 @@ class UIComponents:
 
         if hasattr(self, 'opacity_3d_slider'):
             self.opacity_3d_slider.setValue(int(cfg["opacity"]))
+        if hasattr(self, 'specular_3d_slider'):
+            self.specular_3d_slider.setValue(int(cfg["specular"]))
         self.specular_slider.setValue(int(cfg["specular"]))
         self.brightness_slider.setValue(int(cfg["brightness"]))
         self.scatter_slider.setValue(int(cfg["scatter"]))
@@ -3282,14 +3646,15 @@ class UIComponents:
 
         self.apply_scene_view_options()
         self.apply_3d_lighting_settings()
+        self.apply_advanced_3d_settings()
         self.statusBar().showMessage(f"应用3D预设：{preset_name}", 2000)
 
     def apply_scene_view_options(self):
         """应用场景视图相关选项到2D/3D视图。"""
-        mode = self.view_mode_combo.currentText() if hasattr(self, 'view_mode_combo') else "2D+3D"
+        mode = self.view_mode_combo.currentText() if hasattr(self, 'view_mode_combo') else "二维+三维"
 
-        volume_visible = (mode in ("3D", "2D+3D"))
-        slice_visible = (mode in ("2D", "2D+3D"))
+        volume_visible = (mode in ("三维", "二维+三维", "3D", "2D+3D"))
+        slice_visible = (mode in ("二维", "二维+三维", "2D", "2D+3D"))
 
         if getattr(self, 'volume_viewer', None):
             self.volume_viewer.setVisible(volume_visible)
@@ -3344,9 +3709,60 @@ class UIComponents:
         if self.volume_viewer is None:
             return
         self.apply_scene_view_options()
+        if hasattr(self, 'render_mode_combo') and self.render_mode_combo.currentText() != "默认":
+            self.on_render_mode_changed(self.render_mode_combo.currentText())
 
     def preview_crop_effect(self):
         self.statusBar().showMessage("裁剪预览入口已启用", 2000)
+
+    def _update_basic_properties_table(self):
+        if not hasattr(self, 'basic_properties_table'):
+            return
+
+        has_data = getattr(self, 'array', None) is not None
+        if has_data:
+            depth, height, width = self.array.shape[:3]
+            sx, sy, sz = getattr(self, 'spacing', (1.0, 1.0, 1.0)) or (1.0, 1.0, 1.0)
+            time_steps = 1
+            voxels = int(width * height * depth * time_steps)
+            size_mb = float(getattr(self.array, 'nbytes', 0)) / (1024.0 * 1024.0)
+            data_type = str(self.array.dtype)
+            volume = voxels * float(sx) * float(sy) * float(sz)
+            rows = [
+                ("宽度", str(width), "X 方向像素总数及其物理尺寸。"),
+                ("高度", str(height), "Y 方向像素总数及其物理尺寸。"),
+                ("深度", str(depth), "Z 方向像素总数及其物理尺寸。"),
+                ("时间步", str(time_steps), "时间维度（T）的大小。"),
+                ("体素数", str(voxels), "数据集中体素总数。"),
+                ("数据大小", f"{size_mb:.2f} MB", "图像数据占用的文件大小。"),
+                ("数据类型", data_type, "数据集使用的基础数据类型。"),
+                ("体积", f"{volume:.2f}", "数据集占用的总体积。"),
+            ]
+        else:
+            rows = [
+                ("宽度", "-", "X 方向像素总数及其物理尺寸。"),
+                ("高度", "-", "Y 方向像素总数及其物理尺寸。"),
+                ("深度", "-", "Z 方向像素总数及其物理尺寸。"),
+                ("时间步", "-", "时间维度（T）的大小。"),
+                ("体素数", "-", "数据集中体素总数。"),
+                ("数据大小", "-", "图像数据占用的文件大小。"),
+                ("数据类型", "-", "数据集使用的基础数据类型。"),
+                ("体积", "-", "数据集占用的总体积。"),
+            ]
+
+        self.basic_properties_table.setRowCount(len(rows))
+        for row_index, (property_text, value_text, description_text) in enumerate(rows):
+            property_item = QtWidgets.QTableWidgetItem(property_text)
+            value_item = QtWidgets.QTableWidgetItem(value_text)
+            description_item = QtWidgets.QTableWidgetItem(description_text)
+            property_item.setForeground(QtGui.QBrush(QtGui.QColor('#e7e7e7')))
+            value_item.setForeground(QtGui.QBrush(QtGui.QColor('#e7e7e7')))
+            description_item.setForeground(QtGui.QBrush(QtGui.QColor('#d0d0d0')))
+            self.basic_properties_table.setItem(row_index, 0, property_item)
+            self.basic_properties_table.setItem(row_index, 1, value_item)
+            self.basic_properties_table.setItem(row_index, 2, description_item)
+
+        self.basic_properties_table.resizeRowsToContents()
 
     def _refresh_preview_thumbnail(self):
         if not hasattr(self, 'preview_thumb_label'):
@@ -3392,13 +3808,17 @@ class UIComponents:
         else:
             return
 
-        if self.axial_viewer:
-            self.axial_viewer.slider.setValue(z_idx)
-            self.axial_viewer.set_crosshair(x_idx, y_idx)
-        if self.cor_viewer:
-            self.cor_viewer.slider.setValue(y_idx)
-            self.cor_viewer.set_crosshair(x_idx, z_idx)
-        if self.sag_viewer:
-            self.sag_viewer.slider.setValue(x_idx)
-            self.sag_viewer.set_crosshair(y_idx, z_idx)
+        self._syncing_slice_sliders = True
+        try:
+            if self.axial_viewer:
+                self.axial_viewer.slider.setValue(z_idx)
+                self.axial_viewer.set_crosshair(x_idx, y_idx)
+            if self.cor_viewer:
+                self.cor_viewer.slider.setValue(y_idx)
+                self.cor_viewer.set_crosshair(x_idx, z_idx)
+            if self.sag_viewer:
+                self.sag_viewer.slider.setValue(x_idx)
+                self.sag_viewer.set_crosshair(y_idx, z_idx)
+        finally:
+            self._syncing_slice_sliders = False
 

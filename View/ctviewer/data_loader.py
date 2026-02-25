@@ -59,7 +59,7 @@ class DataLoader:
                 sx_input.setValue(1.0)
                 sx_input.setSingleStep(0.001)
                 sx_input.setToolTip("X方向体素大小（例如 mm）")
-                form_layout.addRow("Spacing X (mm):", sx_input)
+                form_layout.addRow("X 方向间距 (mm):", sx_input)
 
                 sy_input = QtWidgets.QDoubleSpinBox()
                 sy_input.setRange(0.000001, 1000.0)
@@ -67,7 +67,7 @@ class DataLoader:
                 sy_input.setValue(1.0)
                 sy_input.setSingleStep(0.001)
                 sy_input.setToolTip("Y方向体素大小（例如 mm）")
-                form_layout.addRow("Spacing Y (mm):", sy_input)
+                form_layout.addRow("Y 方向间距 (mm):", sy_input)
 
                 sz_input = QtWidgets.QDoubleSpinBox()
                 sz_input.setRange(0.000001, 1000.0)
@@ -75,7 +75,7 @@ class DataLoader:
                 sz_input.setValue(1.0)
                 sz_input.setSingleStep(0.001)
                 sz_input.setToolTip("Z方向体素大小（例如 mm）")
-                form_layout.addRow("Spacing Z (mm):", sz_input)
+                form_layout.addRow("Z 方向间距 (mm):", sz_input)
 
                 # 确认按钮
                 button_box = QtWidgets.QDialogButtonBox(
@@ -264,7 +264,9 @@ class DataLoader:
             if hasattr(self, 'prop_slice_count_label'):
                 self.prop_slice_count_label.setText(str(self.depth_z))
             if hasattr(self, 'prop_format_label'):
-                self.prop_format_label.setText(os.path.splitext(filename)[1].lower().replace('.', '') or "volume")
+                self.prop_format_label.setText(os.path.splitext(filename)[1].lower().replace('.', '') or "体数据")
+            if hasattr(self, '_update_basic_properties_table'):
+                self._update_basic_properties_table()
             if is_segmentation:
                 print("✓ 检测到分割结果，将不应用窗宽窗位")
             
@@ -274,15 +276,15 @@ class DataLoader:
             # 创建三个方向的切片视图
             if hasattr(self, 'rgb_array') and self.rgb_array is not None:
                 # RGB图像的切片获取
-                self.axial_viewer = SliceViewer("Axial (彩色)",
+                self.axial_viewer = SliceViewer("轴位 (彩色)",
                                           lambda z: self.rgb_array[z, :, :, :],
                                                                                     self.depth_z,
                                                                                     parent_viewer=self)
-                self.sag_viewer = SliceViewer("Sagittal (彩色)",
+                self.sag_viewer = SliceViewer("矢状 (彩色)",
                                         lambda x: self.rgb_array[:, :, x, :],
                                                                                 self.depth_x,
                                                                                 parent_viewer=self)
-                self.cor_viewer = SliceViewer("Coronal (彩色)",
+                self.cor_viewer = SliceViewer("冠状 (彩色)",
                                         lambda y: self.rgb_array[:, y, :, :],
                                                                                 self.depth_y,
                                                                                 parent_viewer=self)
@@ -291,28 +293,28 @@ class DataLoader:
                 # 如果是分割结果，使用优化的显示映射而不是窗宽窗位
                 if is_segmentation:
                     print("创建分割结果视图（使用优化的显示映射）")
-                    self.axial_viewer = SliceViewer("Axial (分割)",
+                    self.axial_viewer = SliceViewer("轴位 (分割)",
                                               lambda z: self.apply_segmentation_display(self.array[z, :, :]),
                                               self.depth_z,
                                               parent_viewer=self)
-                    self.sag_viewer = SliceViewer("Sagittal (分割)",
+                    self.sag_viewer = SliceViewer("矢状 (分割)",
                                             lambda x: self.apply_segmentation_display(self.array[:, :, x]),
                                             self.depth_x,
                                             parent_viewer=self)
-                    self.cor_viewer = SliceViewer("Coronal (分割)",
+                    self.cor_viewer = SliceViewer("冠状 (分割)",
                                             lambda y: self.apply_segmentation_display(self.array[:, y, :]),
                                             self.depth_y,
                                             parent_viewer=self)
                 else:
-                    self.axial_viewer = SliceViewer("Axial",
+                    self.axial_viewer = SliceViewer("轴位",
                                               lambda z: self.apply_window_level_to_slice(self.array[z, :, :]),
                                               self.depth_z,
                                               parent_viewer=self)
-                    self.sag_viewer = SliceViewer("Sagittal",
+                    self.sag_viewer = SliceViewer("矢状",
                                             lambda x: self.apply_window_level_to_slice(self.array[:, :, x]),
                                             self.depth_x,
                                             parent_viewer=self)
-                    self.cor_viewer = SliceViewer("Coronal",
+                    self.cor_viewer = SliceViewer("冠状",
                                             lambda y: self.apply_window_level_to_slice(self.array[:, y, :]),
                                             self.depth_y,
                                             parent_viewer=self)
@@ -348,7 +350,7 @@ class DataLoader:
                 # 创建三维体渲染视图（禁用降采样）
                 self.volume_viewer = VolumeViewer(self.array, self.spacing, simplified=True, downsample_factor=1)
                 if hasattr(self.volume_viewer, 'set_background_color'):
-                    self.volume_viewer.set_background_color((0.45, 0.08, 0.08))
+                    self.volume_viewer.set_background_color((0.08, 0.08, 0.10))
                 if hasattr(self, 'apply_current_3d_controls'):
                     self.apply_current_3d_controls()
                 
@@ -365,13 +367,16 @@ class DataLoader:
                 self.grid_layout.addWidget(self.sag_viewer, 1, 1)
                 
                 # 在左上角显示提示信息
-                info_label = QtWidgets.QLabel("3D视图不可用\n(数据全为0)")
+                info_label = QtWidgets.QLabel("三维视图不可用\n(数据全为0)")
                 info_label.setAlignment(QtCore.Qt.AlignCenter)
-                info_label.setStyleSheet("QLabel { background-color: #4a0000; color: #d0d0d0; font-size: 14pt; }")
+                info_label.setStyleSheet("QLabel { background-color: #151515; border: 1px solid #3f3f3f; color: #d0d0d0; font-size: 14pt; }")
                 self.grid_layout.addWidget(info_label, 0, 0)
+
+            if hasattr(self, '_on_2d_viewers_created'):
+                self._on_2d_viewers_created()
             
             # 更新显示
-            self.setWindowTitle(f"CT Viewer - {os.path.basename(filename)}")
+            self.setWindowTitle(f"工业CT智能软件 - {os.path.basename(filename)}")
             
             # 初始化窗宽窗位
             if hasattr(self, 'reset_window_level'):
@@ -418,15 +423,15 @@ class DataLoader:
         self.clear_viewers()
         
         # 重新创建视图组件
-        self.axial_viewer = SliceViewer("Axial",
+        self.axial_viewer = SliceViewer("轴位",
                                   lambda z: self.apply_window_level_to_slice(self.array[z, :, :]),
                                   self.depth_z,
                                   parent_viewer=self)
-        self.sag_viewer = SliceViewer("Sagittal",
+        self.sag_viewer = SliceViewer("矢状",
                                 lambda x: self.apply_window_level_to_slice(self.array[:, :, x]),
                                 self.depth_x,
                                 parent_viewer=self)
-        self.cor_viewer = SliceViewer("Coronal",
+        self.cor_viewer = SliceViewer("冠状",
                                 lambda y: self.apply_window_level_to_slice(self.array[:, y, :]),
                                 self.depth_y,
                                 parent_viewer=self)
@@ -434,7 +439,7 @@ class DataLoader:
         # 创建简化版3D体渲染视图（禁用降采样）
         self.volume_viewer = VolumeViewer(self.array, self.spacing, simplified=True, downsample_factor=1)
         if hasattr(self.volume_viewer, 'set_background_color'):
-            self.volume_viewer.set_background_color((0.45, 0.08, 0.08))
+            self.volume_viewer.set_background_color((0.08, 0.08, 0.10))
         if hasattr(self, 'apply_current_3d_controls'):
             self.apply_current_3d_controls()
         
@@ -446,6 +451,9 @@ class DataLoader:
         self.grid_layout.addWidget(self.cor_viewer, 0, 1)
         self.grid_layout.addWidget(self.axial_viewer, 1, 0)
         self.grid_layout.addWidget(self.sag_viewer, 1, 1)
+
+        if hasattr(self, '_on_2d_viewers_created'):
+            self._on_2d_viewers_created()
         
         # 更新灰度直方图
         if hasattr(self, 'update_histogram'):
@@ -510,21 +518,21 @@ class DataLoader:
             QtWidgets.QApplication.processEvents()
             
             # 重新创建视图组件
-            self.axial_viewer = SliceViewer("Axial",
+            self.axial_viewer = SliceViewer("轴位",
                                       lambda z: self.apply_window_level_to_slice(self.array[z, :, :]),
                                       self.depth_z,
                                       parent_viewer=self)
             progress.setValue(1)
             QtWidgets.QApplication.processEvents()
             
-            self.sag_viewer = SliceViewer("Sagittal",
+            self.sag_viewer = SliceViewer("矢状",
                                     lambda x: self.apply_window_level_to_slice(self.array[:, :, x]),
                                     self.depth_x,
                                     parent_viewer=self)
             progress.setValue(2)
             QtWidgets.QApplication.processEvents()
             
-            self.cor_viewer = SliceViewer("Coronal",
+            self.cor_viewer = SliceViewer("冠状",
                                     lambda y: self.apply_window_level_to_slice(self.array[:, y, :]),
                                     self.depth_y,
                                     parent_viewer=self)
@@ -547,12 +555,15 @@ class DataLoader:
             self.grid_layout.addWidget(self.sag_viewer, 0, 1)
             self.grid_layout.addWidget(self.cor_viewer, 1, 0)
             self.grid_layout.addWidget(self.volume_viewer, 1, 1)
+
+            if hasattr(self, '_on_2d_viewers_created'):
+                self._on_2d_viewers_created()
             
             # 关闭进度对话框
             progress.close()
             
             # 更新窗口标题
-            self.setWindowTitle(f"CT Viewer - {title}")
+            self.setWindowTitle(f"工业CT智能软件 - {title}")
             
             # 更新灰度直方图
             if hasattr(self, 'update_histogram'):
@@ -695,17 +706,17 @@ class DataLoader:
             QtWidgets.QApplication.processEvents()
             
             # 重新创建视图组件
-            self.axial_viewer = SliceViewer("Axial",
+            self.axial_viewer = SliceViewer("轴位",
                                       lambda z: self.apply_window_level_to_slice(self.raw_array[z, :, :]),
                                       self.depth_z,
                                       parent_viewer=self)
             
-            self.sag_viewer = SliceViewer("Sagittal",
+            self.sag_viewer = SliceViewer("矢状",
                                     lambda x: self.apply_window_level_to_slice(self.raw_array[:, :, x]),
                                     self.depth_x,
                                     parent_viewer=self)
             
-            self.cor_viewer = SliceViewer("Coronal",
+            self.cor_viewer = SliceViewer("冠状",
                                     lambda y: self.apply_window_level_to_slice(self.raw_array[:, y, :]),
                                     self.depth_y,
                                     parent_viewer=self)
@@ -731,12 +742,15 @@ class DataLoader:
             self.grid_layout.addWidget(self.sag_viewer, 0, 1)
             self.grid_layout.addWidget(self.cor_viewer, 1, 0)
             self.grid_layout.addWidget(self.volume_viewer, 1, 1)
+
+            if hasattr(self, '_on_2d_viewers_created'):
+                self._on_2d_viewers_created()
             
             progress.setValue(100)
             progress.close()
             
             # 更新窗口标题
-            self.setWindowTitle(f"CT Viewer - {title}")
+            self.setWindowTitle(f"工业CT智能软件 - {title}")
             
             # 更新灰度直方图
             if hasattr(self, 'update_histogram'):
@@ -759,7 +773,7 @@ class DataLoader:
             return
 
         # 选择方向
-        axes = {"Z (Axial)": 0, "Y (Coronal)": 1, "X (Sagittal)": 2}
+        axes = {"Z (轴位)": 0, "Y (冠状)": 1, "X (矢状)": 2}
         items = list(axes.keys())
         item, ok = QtWidgets.QInputDialog.getItem(self, "选择导出方向", "沿哪个方向导出切片：", items, 0, False)
         if not ok:
@@ -772,7 +786,7 @@ class DataLoader:
             return
 
         # 文件名前缀
-        prefix, ok = QtWidgets.QInputDialog.getText(self, "输入文件前缀", "每张切片的文件名前缀（例如 slice）：", text="slice")
+        prefix, ok = QtWidgets.QInputDialog.getText(self, "输入文件前缀", "每张切片的文件名前缀（例如 切片）：", text="切片")
         if not ok:
             return
 

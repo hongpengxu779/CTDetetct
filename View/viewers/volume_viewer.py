@@ -205,15 +205,287 @@ class VolumeViewer(QtWidgets.QFrame):
         self.current_render_mode = "默认"
         self.default_color_func = None
         self.default_opacity_func = None
+        self.default_material = None
+        self.light_settings = {
+            'light_position': 50,
+            'light_intensity': 60,
+            'shadow_strength': 40,
+            'shadow_alpha': 50,
+            'brightness': 50,
+            'spot': 30,
+            'specular': 35,
+            'scatter': 45,
+        }
+        self.advanced_3d_settings = {
+            'solidity': 80,
+            'diffuse': 75,
+            'specular': 20,
+            'shininess': 35,
+            'tone_mapping': False,
+            'unsharp': False,
+            'specular_boost': False,
+            'noise_reduction': False,
+            'edge_contrast': False,
+            'filtered_gradient': False,
+            'high_quality': True,
+            'median': False,
+            'lut_3d': 'grayscale',
+            'absolute_lut': False,
+            'flip_roi_lut': False,
+            'gamma_enhance': False,
+            'interpolation_3d': 'Linear',
+        }
         if self.property is not None:
             try:
                 self.default_color_func = vtk.vtkColorTransferFunction()
                 self.default_color_func.DeepCopy(self.property.GetRGBTransferFunction())
                 self.default_opacity_func = vtk.vtkPiecewiseFunction()
                 self.default_opacity_func.DeepCopy(self.property.GetScalarOpacity())
+                self.default_material = {
+                    'ambient': float(self.property.GetAmbient()),
+                    'diffuse': float(self.property.GetDiffuse()),
+                    'specular': float(self.property.GetSpecular()),
+                    'specular_power': float(self.property.GetSpecularPower()),
+                    'shade': bool(self.property.GetShade()),
+                    'scalar_opacity_unit_distance': float(self.property.GetScalarOpacityUnitDistance()),
+                }
             except Exception:
                 self.default_color_func = None
                 self.default_opacity_func = None
+                self.default_material = None
+
+    def _build_lut_color_func(self, lut_name, vmin, vmax, flip=False, gamma=1.0, tone_mapping=False):
+        lut = str(lut_name or 'grayscale').lower()
+        span = max(1e-6, float(vmax - vmin))
+
+        color_func = vtk.vtkColorTransferFunction()
+
+        def add_point(t, r, g, b):
+            t = float(max(0.0, min(1.0, t)))
+            if tone_mapping:
+                t = math.sqrt(t)
+            if gamma != 1.0:
+                t = math.pow(max(1e-6, t), gamma)
+            x = vmin + span * (1.0 - t if flip else t)
+            color_func.AddRGBPoint(float(x), float(max(0.0, min(1.0, r))), float(max(0.0, min(1.0, g))), float(max(0.0, min(1.0, b))))
+
+        if lut == 'bone':
+            add_point(0.0, 0.00, 0.00, 0.00)
+            add_point(0.35, 0.38, 0.38, 0.45)
+            add_point(0.70, 0.78, 0.80, 0.85)
+            add_point(1.0, 1.00, 1.00, 1.00)
+        elif lut == 'coolwarm':
+            add_point(0.0, 0.23, 0.30, 0.75)
+            add_point(0.5, 0.86, 0.86, 0.86)
+            add_point(1.0, 0.75, 0.25, 0.23)
+        else:
+            add_point(0.0, 0.0, 0.0, 0.0)
+            add_point(0.35, 0.35, 0.35, 0.35)
+            add_point(0.70, 0.70, 0.70, 0.70)
+            add_point(1.0, 1.0, 1.0, 1.0)
+        return color_func
+
+    def configure_advanced_3d(self, **kwargs):
+        if not hasattr(self, 'advanced_3d_settings'):
+            self.advanced_3d_settings = {}
+        self.advanced_3d_settings.update(kwargs)
+        self._apply_advanced_3d_settings(render=True)
+
+    def _apply_advanced_3d_settings(self, render=False):
+        if self.property is None or self.mapper is None:
+            return
+
+        cfg = self.advanced_3d_settings if hasattr(self, 'advanced_3d_settings') else {}
+
+        vmin, vmax = self._safe_scalar_range()
+        use_abs = bool(cfg.get('absolute_lut', False))
+        lut_min, lut_max = (0.0, 65535.0) if use_abs else (vmin, vmax)
+
+        gamma = 0.8 if bool(cfg.get('gamma_enhance', False)) else 1.0
+        tone_mapping = bool(cfg.get('tone_mapping', False))
+        flip_lut = bool(cfg.get('flip_roi_lut', False))
+        lut_name = cfg.get('lut_3d', 'grayscale')
+
+        is_default_cfg = (
+            int(cfg.get('solidity', 80)) == 80 and
+            int(cfg.get('diffuse', 75)) == 75 and
+            int(cfg.get('specular', 20)) == 20 and
+            int(cfg.get('shininess', 35)) == 35 and
+            not bool(cfg.get('tone_mapping', False)) and
+            not bool(cfg.get('unsharp', False)) and
+            not bool(cfg.get('specular_boost', False)) and
+            not bool(cfg.get('noise_reduction', False)) and
+            not bool(cfg.get('edge_contrast', False)) and
+            not bool(cfg.get('filtered_gradient', False)) and
+            bool(cfg.get('high_quality', True)) and
+            not bool(cfg.get('median', False)) and
+            str(cfg.get('lut_3d', 'grayscale')).lower() == 'grayscale' and
+            not bool(cfg.get('absolute_lut', False)) and
+            not bool(cfg.get('flip_roi_lut', False)) and
+            not bool(cfg.get('gamma_enhance', False)) and
+            str(cfg.get('interpolation_3d', 'Linear')).lower().startswith('lin')
+        )
+
+        if is_default_cfg and self.current_render_mode in ("默认", "体渲染") and self.default_color_func is not None and self.default_opacity_func is not None:
+            color_func = vtk.vtkColorTransferFunction()
+            color_func.DeepCopy(self.default_color_func)
+            opacity_func = vtk.vtkPiecewiseFunction()
+            opacity_func.DeepCopy(self.default_opacity_func)
+        else:
+            color_func = self._build_lut_color_func(lut_name, lut_min, lut_max, flip=flip_lut, gamma=gamma, tone_mapping=tone_mapping)
+            solidity_n = max(0.0, min(1.0, float(cfg.get('solidity', 80)) / 100.0))
+            opacity_func = vtk.vtkPiecewiseFunction()
+            opacity_func.AddPoint(vmin, 0.0)
+            opacity_func.AddPoint(vmin + (vmax - vmin) * 0.15, 0.04 * solidity_n)
+            opacity_func.AddPoint(vmin + (vmax - vmin) * 0.45, 0.30 * solidity_n)
+            opacity_func.AddPoint(vmin + (vmax - vmin) * 0.75, 0.68 * solidity_n)
+            opacity_func.AddPoint(vmax, min(1.0, 0.98 * solidity_n + 0.02))
+
+        self.property.SetColor(color_func)
+        self.property.SetScalarOpacity(opacity_func)
+
+        light_cfg = self.light_settings if hasattr(self, 'light_settings') else {}
+        light_intensity_n = max(0.0, min(1.0, float(light_cfg.get('light_intensity', 60)) / 100.0))
+        brightness_n = max(0.0, min(1.0, float(light_cfg.get('brightness', 50)) / 100.0))
+        light_specular_n = max(0.0, min(1.0, float(light_cfg.get('specular', 35)) / 100.0))
+        scatter_n = max(0.0, min(1.0, float(light_cfg.get('scatter', 45)) / 100.0))
+        spot_n = max(0.0, min(1.0, float(light_cfg.get('spot', 30)) / 100.0))
+        shadow_alpha_n = max(0.0, min(1.0, float(light_cfg.get('shadow_alpha', 50)) / 100.0))
+
+        is_default_light = (
+            abs(float(light_cfg.get('light_position', 50)) - 50.0) < 1e-6 and
+            abs(float(light_cfg.get('light_intensity', 60)) - 60.0) < 1e-6 and
+            abs(float(light_cfg.get('shadow_strength', 40)) - 40.0) < 1e-6 and
+            abs(float(light_cfg.get('shadow_alpha', 50)) - 50.0) < 1e-6 and
+            abs(float(light_cfg.get('brightness', 50)) - 50.0) < 1e-6 and
+            abs(float(light_cfg.get('spot', 30)) - 30.0) < 1e-6 and
+            abs(float(light_cfg.get('specular', 35)) - 35.0) < 1e-6 and
+            abs(float(light_cfg.get('scatter', 45)) - 45.0) < 1e-6
+        )
+
+        if is_default_cfg and is_default_light and self.current_render_mode in ("默认", "体渲染") and self.default_material is not None:
+            self.property.SetAmbient(float(self.default_material.get('ambient', 0.25)))
+            self.property.SetDiffuse(float(self.default_material.get('diffuse', 0.75)))
+            self.property.SetSpecular(float(self.default_material.get('specular', 0.15)))
+            self.property.SetSpecularPower(float(self.default_material.get('specular_power', 10.0)))
+            if bool(self.default_material.get('shade', True)):
+                self.property.ShadeOn()
+            else:
+                self.property.ShadeOff()
+            self.property.SetScalarOpacityUnitDistance(float(self.default_material.get('scalar_opacity_unit_distance', 1.0)))
+        else:
+            base_diffuse = max(0.0, min(1.0, float(cfg.get('diffuse', 75)) / 100.0))
+            base_specular = max(0.0, min(1.0, float(cfg.get('specular', 20)) / 100.0))
+            light_diffuse_scale = 0.65 + 0.55 * light_intensity_n + 0.35 * brightness_n
+            diffuse = max(0.0, min(1.0, base_diffuse * light_diffuse_scale))
+            specular = max(0.0, min(1.0, base_specular * (0.60 + 0.80 * light_specular_n)))
+            shininess = max(1.0, min(100.0, float(cfg.get('shininess', 35))))
+            if bool(cfg.get('specular_boost', False)):
+                specular = min(1.0, specular * 1.55)
+
+            ambient = 0.05 + 0.35 * scatter_n
+            if bool(cfg.get('noise_reduction', False)):
+                ambient = min(1.0, ambient + 0.08)
+                specular = max(0.0, specular * 0.85)
+
+            if bool(cfg.get('edge_contrast', False)):
+                specular = min(1.0, specular * 1.15)
+                diffuse = min(1.0, diffuse * 1.06)
+
+            shade_on = bool(cfg.get('high_quality', True)) or bool(cfg.get('edge_contrast', False)) or specular > 0.05
+            if self.current_render_mode in ("MIP", "MinIP"):
+                shade_on = False
+            if shade_on:
+                self.property.ShadeOn()
+            else:
+                self.property.ShadeOff()
+
+            self.property.SetAmbient(ambient)
+            self.property.SetDiffuse(diffuse)
+            self.property.SetSpecular(specular)
+            self.property.SetSpecularPower(5.0 + shininess * (0.65 + 0.55 * spot_n))
+            self.property.SetScalarOpacityUnitDistance(0.2 + (1.0 - shadow_alpha_n) * 2.2)
+
+        interp_mode = str(cfg.get('interpolation_3d', 'Linear')).lower()
+        if interp_mode.startswith('near'):
+            self.property.SetInterpolationTypeToNearest()
+        else:
+            self.property.SetInterpolationTypeToLinear()
+
+        edge_contrast = bool(cfg.get('edge_contrast', False))
+        filtered_gradient = bool(cfg.get('filtered_gradient', False))
+        hard_gradient = bool(cfg.get('unsharp', False))
+        gradient_enhance = bool(cfg.get('unsharp', False))
+        noise_reduction = bool(cfg.get('noise_reduction', False))
+        median = bool(cfg.get('median', False))
+
+        grad_max = max(64.0, float(vmax - vmin) * 0.18)
+        g1 = grad_max * 0.12
+        g2 = grad_max * 0.36
+        g3 = grad_max * 0.70
+
+        grad_func = vtk.vtkPiecewiseFunction()
+        if edge_contrast or gradient_enhance:
+            if hard_gradient:
+                grad_func.AddPoint(0.0, 0.0)
+                grad_func.AddPoint(g1 * 0.8, 0.0)
+                grad_func.AddPoint(g2, 0.85)
+                grad_func.AddPoint(grad_max, 1.0)
+            elif filtered_gradient:
+                grad_func.AddPoint(0.0, 0.0)
+                grad_func.AddPoint(g1, 0.08)
+                grad_func.AddPoint(g2, 0.45)
+                grad_func.AddPoint(grad_max, 0.82)
+            else:
+                grad_func.AddPoint(0.0, 0.0)
+                grad_func.AddPoint(g1, 0.0)
+                grad_func.AddPoint(g3, 0.72)
+                grad_func.AddPoint(grad_max, 1.0)
+        else:
+            grad_func.AddPoint(0.0, 0.0)
+            grad_func.AddPoint(grad_max, 1.0)
+
+        if noise_reduction or median:
+            # 降噪/中值时整体减弱梯度响应，减少噪点闪烁
+            grad_smooth = vtk.vtkPiecewiseFunction()
+            grad_smooth.AddPoint(0.0, 0.0)
+            grad_smooth.AddPoint(g1, 0.0)
+            grad_smooth.AddPoint(g2, 0.32 if median else 0.40)
+            grad_smooth.AddPoint(grad_max, 0.60 if median else 0.72)
+            grad_func = grad_smooth
+
+        self.property.SetGradientOpacity(grad_func)
+
+        high_quality = bool(cfg.get('high_quality', True))
+
+        self.mapper.SetAutoAdjustSampleDistances(not high_quality)
+        base_distance = self.default_sample_distance
+        image_sample_distance = 1.0
+        if high_quality:
+            base_distance = max(self.default_sample_distance * 0.55, 0.05)
+            image_sample_distance = 1.0
+        else:
+            base_distance = max(self.default_sample_distance, 0.08)
+            image_sample_distance = 1.45
+
+        if noise_reduction:
+            base_distance *= 1.80
+            image_sample_distance += 0.40
+        if median:
+            base_distance *= 1.60
+            image_sample_distance += 0.45
+            self.property.SetInterpolationTypeToLinear()
+        if str(cfg.get('interpolation_3d', 'Linear')).lower().startswith('cubic'):
+            base_distance *= 0.80
+        if hard_gradient or edge_contrast:
+            base_distance *= 0.88
+
+        self.mapper.SetImageSampleDistance(max(0.7, float(image_sample_distance)))
+
+        self.mapper.SetSampleDistance(max(0.03, float(base_distance)))
+
+        if render:
+            self._render()
 
     def _render(self):
         if hasattr(self, 'renderer') and self.renderer is not None:
@@ -312,12 +584,24 @@ class VolumeViewer(QtWidgets.QFrame):
 
         self.property.SetColor(color_func)
         self.property.SetScalarOpacity(opacity_func)
+        self._apply_advanced_3d_settings(render=False)
         self._render()
 
     def set_light_settings(self, light_position=50, light_intensity=60, shadow_strength=40,
                            shadow_alpha=50, brightness=50, spot=30, specular=35, scatter=45):
         if self.property is None or self.renderer is None:
             return
+
+        self.light_settings = {
+            'light_position': float(light_position),
+            'light_intensity': float(light_intensity),
+            'shadow_strength': float(shadow_strength),
+            'shadow_alpha': float(shadow_alpha),
+            'brightness': float(brightness),
+            'spot': float(spot),
+            'specular': float(specular),
+            'scatter': float(scatter),
+        }
 
         if self.light is None:
             self.light = vtk.vtkLight()
@@ -331,22 +615,8 @@ class VolumeViewer(QtWidgets.QFrame):
 
         light_intensity_n = max(0.0, min(1.0, float(light_intensity) / 100.0))
         brightness_n = max(0.0, min(1.0, float(brightness) / 100.0))
-        specular_n = max(0.0, min(1.0, float(specular) / 100.0))
-        scatter_n = max(0.0, min(1.0, float(scatter) / 100.0))
         spot_n = max(0.0, min(1.0, float(spot) / 100.0))
         shadow_strength_n = max(0.0, min(1.0, float(shadow_strength) / 100.0))
-        shadow_alpha_n = max(0.0, min(1.0, float(shadow_alpha) / 100.0))
-
-        ambient = 0.06 + 0.44 * scatter_n
-        diffuse = 0.10 + 0.80 * light_intensity_n
-        diffuse *= (0.4 + 0.8 * brightness_n)
-        diffuse = max(0.0, min(1.0, diffuse))
-
-        self.property.SetAmbient(ambient)
-        self.property.SetDiffuse(diffuse)
-        self.property.SetSpecular(specular_n)
-        self.property.SetSpecularPower(5.0 + 45.0 * spot_n)
-        self.property.SetScalarOpacityUnitDistance(0.2 + (1.0 - shadow_alpha_n) * 2.2)
 
         if hasattr(self.renderer, 'SetUseShadows'):
             self.renderer.SetUseShadows(shadow_strength_n > 0.05)
@@ -358,7 +628,7 @@ class VolumeViewer(QtWidgets.QFrame):
             self.light.SetIntensity(0.15 + 1.35 * light_intensity_n)
             self.light.SetConeAngle(15.0 + 60.0 * spot_n)
 
-        self._render()
+        self._apply_advanced_3d_settings(render=True)
 
     def set_focus_settings(self, auto_focus=True, focus_distance=40, depth_of_field=30):
         if self.renderer is None:

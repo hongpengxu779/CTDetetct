@@ -86,13 +86,16 @@ class SliceViewer(QtWidgets.QWidget):
         self._wl_roi_selecting = False
         self._wl_roi_start = None
         self._wl_roi_rect_item = None
+        self.display_opacity = 1.0
+        self.interpolation_enabled = True
+        self.interpolation_mode_text = "线性"
         
         # 确定视图类型
-        if "Axial" in title:
+        if "Axial" in title or "轴位" in title:
             self.view_type = "axial"
-        elif "Sagittal" in title:
+        elif "Sagittal" in title or "矢状" in title:
             self.view_type = "sagittal"
-        elif "Coronal" in title:
+        elif "Coronal" in title or "冠状" in title:
             self.view_type = "coronal"
         else:
             self.view_type = "unknown"
@@ -200,6 +203,27 @@ class SliceViewer(QtWidgets.QWidget):
         # 启用鼠标跟踪，使 MouseMove 在无按钮按下时也能触发
         self.view.setMouseTracking(True)
         self.view.viewport().setMouseTracking(True)
+
+    def set_slice_opacity(self, opacity_percent):
+        """设置切片显示透明度（0-100）。"""
+        value = max(0.0, min(100.0, float(opacity_percent)))
+        self.display_opacity = value / 100.0
+        self.pixmap_item.setOpacity(self.display_opacity)
+
+    def set_overlay_visible(self, visible):
+        """控制覆盖层标签显示。"""
+        if hasattr(self, 'overlay_label') and self.overlay_label is not None:
+            self.overlay_label.setVisible(bool(visible))
+
+    def set_interpolation_settings(self, enabled, mode_text=None):
+        """设置2D插值模式。"""
+        self.interpolation_enabled = bool(enabled)
+        if mode_text is not None:
+            self.interpolation_mode_text = str(mode_text)
+
+        smooth = self.interpolation_enabled and (self.interpolation_mode_text != "最近邻")
+        self.view.setRenderHint(QtGui.QPainter.SmoothPixmapTransform, smooth)
+        self._refresh_current_slice()
     
     def _update_zoom_button_position(self):
         """更新放大按钮位置到视图右上角"""
@@ -209,13 +233,21 @@ class SliceViewer(QtWidgets.QWidget):
 
     def _update_overlay_text(self, idx):
         """更新视图覆盖层文本"""
+        view_name = self.title
+        if self.view_type == 'axial':
+            view_name = '轴位'
+        elif self.view_type == 'sagittal':
+            view_name = '矢状'
+        elif self.view_type == 'coronal':
+            view_name = '冠状'
+
         extra = ""
         if self.parent_viewer is not None:
             w = getattr(self.parent_viewer, 'window_width', None)
             c = getattr(self.parent_viewer, 'window_level', None)
             if w is not None and c is not None:
-                extra = f"\nW:{int(w)} C:{int(c)}"
-        self.overlay_label.setText(f"{self.title}{extra}\nSlice {idx + 1}/{self.max_index}")
+                extra = f"\n窗宽:{int(w)} 窗位:{int(c)}"
+        self.overlay_label.setText(f"{view_name}{extra}\n切片 {idx + 1}/{self.max_index}")
         self.overlay_label.adjustSize()
 
     def set_crosshair(self, x, y):
@@ -303,7 +335,9 @@ class SliceViewer(QtWidgets.QWidget):
         transform.scale(sx, sy)
         if abs(angle) > 1e-6:
             transform.rotate(angle)
-        return pixmap.transformed(transform, QtCore.Qt.SmoothTransformation)
+        smooth = self.interpolation_enabled and (self.interpolation_mode_text != "最近邻")
+        transform_mode = QtCore.Qt.SmoothTransformation if smooth else QtCore.Qt.FastTransformation
+        return pixmap.transformed(transform, transform_mode)
 
     def _refresh_current_slice(self):
         self.update_slice(self.slider.value())
@@ -352,6 +386,7 @@ class SliceViewer(QtWidgets.QWidget):
         
         # 更新图像项
         self.pixmap_item.setPixmap(pix)
+        self.pixmap_item.setOpacity(self.display_opacity)
         
         # 调整场景大小以适应图像
         self.scene.setSceneRect(self.pixmap_item.boundingRect())
@@ -874,11 +909,11 @@ class SliceViewer(QtWidgets.QWidget):
         # Axial   切片 array[z,:,:]   → pixmap(Y, X)  scene_x=X, scene_y=Y
         # Sagittal切片 array[:,:,x]   → pixmap(Z, Y)  scene_x=Y, scene_y=Z
         # Coronal 切片 array[:,y,:]   → pixmap(Z, X)  scene_x=X, scene_y=Z
-        if "Axial" in self.title:
+        if "Axial" in self.title or "轴位" in self.title:
             seed_point = (current_slice, y, x)       # (z, y, x)
-        elif "Sagittal" in self.title:
+        elif "Sagittal" in self.title or "矢状" in self.title:
             seed_point = (y, x, current_slice)       # (z=scene_y, y=scene_x, x=slice)
-        elif "Coronal" in self.title:
+        elif "Coronal" in self.title or "冠状" in self.title:
             seed_point = (y, current_slice, x)       # (z=scene_y, y=slice, x=scene_x)
         else:
             seed_point = (current_slice, y, x)

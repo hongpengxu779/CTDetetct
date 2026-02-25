@@ -10,6 +10,47 @@ from PyQt5 import QtWidgets, QtCore
 class WindowLevelControl:
     """窗宽窗位控制类，作为Mixin使用"""
 
+    def _apply_2d_lut(self, slice_array):
+        """按当前2D设置对切片应用LUT/alpha LUT。"""
+        if slice_array is None:
+            return slice_array
+
+        lut_name = 'grayscale'
+        if hasattr(self, 'lut_2d_combo'):
+            lut_name = str(self.lut_2d_combo.currentText()).lower()
+
+        use_alpha_lut = bool(getattr(self, 'chk_use_alpha_lut', None) and self.chk_use_alpha_lut.isChecked())
+
+        arr_u16 = slice_array.astype(np.uint16)
+        if lut_name == 'grayscale':
+            if use_alpha_lut:
+                alpha = arr_u16.astype(np.float32) / 65535.0
+                arr_u16 = np.clip(arr_u16.astype(np.float32) * alpha, 0, 65535).astype(np.uint16)
+            return arr_u16
+
+        norm = arr_u16.astype(np.float32) / 65535.0
+
+        if lut_name == 'hot':
+            r = np.clip(norm * 3.0, 0.0, 1.0)
+            g = np.clip(norm * 3.0 - 1.0, 0.0, 1.0)
+            b = np.clip(norm * 3.0 - 2.0, 0.0, 1.0)
+        elif lut_name == 'bone':
+            r = np.clip(0.8 * norm + 0.2, 0.0, 1.0)
+            g = np.clip(0.85 * norm + 0.15, 0.0, 1.0)
+            b = np.clip(norm, 0.0, 1.0)
+        elif lut_name == 'jet':
+            r = np.clip(1.5 - np.abs(4.0 * norm - 3.0), 0.0, 1.0)
+            g = np.clip(1.5 - np.abs(4.0 * norm - 2.0), 0.0, 1.0)
+            b = np.clip(1.5 - np.abs(4.0 * norm - 1.0), 0.0, 1.0)
+        else:
+            r = g = b = norm
+
+        rgb = np.stack([r, g, b], axis=-1)
+        if use_alpha_lut:
+            rgb = rgb * norm[..., None]
+
+        return np.clip(rgb * 255.0, 0, 255).astype(np.uint8)
+
     def apply_window_level_drag_delta(self, delta_x, delta_y):
         """在2D视图拖拽时调整窗宽窗位（左右改窗宽，上下改窗位）"""
         if self.raw_array is None:
@@ -96,7 +137,7 @@ class WindowLevelControl:
 
             if hasattr(self, 'statusBar'):
                 self.statusBar().showMessage(
-                    f"ROI自动窗调平已应用: W={width_int}, L={level_int}",
+                        f"ROI自动窗调平已应用: 窗宽={width_int}, 窗位={level_int}",
                     3500
                 )
             return True
@@ -118,7 +159,7 @@ class WindowLevelControl:
         self.wl_value.setText(str(int(self.window_level)))
 
         if hasattr(self, 'prop_window_label'):
-            self.prop_window_label.setText(f"W: {int(self.window_width)}, L: {int(self.window_level)}")
+             self.prop_window_label.setText(f"窗宽: {int(self.window_width)}, 窗位: {int(self.window_level)}")
 
         if hasattr(self, '_sync_histogram_lines_to_window_level'):
             self._sync_histogram_lines_to_window_level()
@@ -142,7 +183,7 @@ class WindowLevelControl:
         self.window_level = int((data_max + data_min) / 2)
 
         if hasattr(self, 'prop_window_label'):
-            self.prop_window_label.setText(f"W: {int(self.window_width)}, L: {int(self.window_level)}")
+             self.prop_window_label.setText(f"窗宽: {int(self.window_width)}, 窗位: {int(self.window_level)}")
         
         self.ww_slider.setValue(self.window_width)
         self.wl_slider.setValue(self.window_level)
@@ -170,7 +211,8 @@ class WindowLevelControl:
         temp_slice = (temp_slice - ww_min) / (ww_max - ww_min) * 65535.0
         np.clip(temp_slice, 0, 65535, out=temp_slice)
         
-        return temp_slice.astype(np.uint16)
+        temp_slice = temp_slice.astype(np.uint16)
+        return self._apply_2d_lut(temp_slice)
     
     def apply_segmentation_display(self, slice_array):
         """
@@ -205,7 +247,8 @@ class WindowLevelControl:
         temp_slice = slice_array.astype(np.float32)
         temp_slice = (temp_slice - slice_min) / (slice_max - slice_min) * 65535.0
         
-        return temp_slice.astype(np.uint16)
+        temp_slice = temp_slice.astype(np.uint16)
+        return self._apply_2d_lut(temp_slice)
     
     def apply_window_level_to_data(self):
         """将窗宽窗位应用到整个数据集（已弃用，保留以兼容旧代码）"""
