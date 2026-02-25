@@ -105,7 +105,7 @@ class FuzzyEnhancementDialog(_BaseEnhancementDialog):
     def accept(self):
         try:
             if self._preview_volume is not None:
-                self.result_array = self._preview_volume
+                self.result_array = self._apply_blend_if_enabled(self._preview_volume)
             else:
                 progress = QtWidgets.QProgressDialog(
                     "正在进行补偿模糊增强...", "取消", 0, 100, self)
@@ -118,7 +118,8 @@ class FuzzyEnhancementDialog(_BaseEnhancementDialog):
                     if progress.wasCanceled():
                         raise InterruptedError("用户取消")
 
-                self.result_array = self._process_volume(self.image_array, cb)
+                enhanced = self._process_volume(self.image_array, cb)
+                self.result_array = self._apply_blend_if_enabled(enhanced)
                 progress.setValue(100)
                 progress.close()
             super().accept()

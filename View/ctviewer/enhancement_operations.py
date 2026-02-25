@@ -3,18 +3,68 @@
 负责直方图均衡化、CLAHE、Retinex SSR、去雾、光照补偿模糊增强等3D图像增强处理
 """
 
-from PyQt5 import QtWidgets
+import numpy as np
+from PyQt5 import QtWidgets, QtCore
 from Traditional.Enhancement.enhancement_dialogs import (
     HistogramEqualizationDialog,
     CLAHEDialog,
     RetinexSSRDialog,
     DehazeDialog,
+    MUSICADialog,
 )
 from Traditional.Enhancement.fuzzy_enhancement_dialog import FuzzyEnhancementDialog
 
 
 class EnhancementOperations:
     """图像增强操作类，作为Mixin使用"""
+
+    def _generate_unique_data_name(self, base_name):
+        if not hasattr(self, 'data_list_widget') or self.data_list_widget is None:
+            return base_name
+
+        existing_names = {
+            self.data_list_widget.item(i).text()
+            for i in range(self.data_list_widget.count())
+        }
+        if base_name not in existing_names:
+            return base_name
+
+        idx = 1
+        while True:
+            candidate = f"{base_name}_{idx}"
+            if candidate not in existing_names:
+                return candidate
+            idx += 1
+
+    def _create_enhanced_data_item(self, result_array, title):
+        current_name = "当前数据"
+        source_item = None
+        if hasattr(self, 'data_list_widget') and self.data_list_widget is not None:
+            current_item = self.data_list_widget.currentItem()
+            if current_item is not None:
+                current_name = current_item.text()
+                source_item = current_item.data(QtCore.Qt.UserRole)
+
+        base_name = current_name.replace(" [标签]", "")
+        new_name = self._generate_unique_data_name(f"{base_name}_{title}")
+
+        spacing = getattr(self, 'spacing', (1.0, 1.0, 1.0))
+        image = getattr(self, 'image', None)
+        if isinstance(source_item, dict):
+            spacing = source_item.get('spacing', spacing)
+            image = source_item.get('image', image)
+
+        data_item = {
+            'image': image,
+            'array': np.asarray(result_array).copy(),
+            'shape': tuple(result_array.shape),
+            'spacing': spacing,
+            'rgb_array': None,
+            'is_segmentation': False,
+            'data_type': 'image',
+            'source_operation': title,
+        }
+        return new_name, data_item
 
     def _run_enhancement_dialog(self, dialog_class, title):
         """通用的增强对话框调用逻辑"""
@@ -28,13 +78,22 @@ class EnhancementOperations:
             if dialog.exec_() == QtWidgets.QDialog.Accepted:
                 result = dialog.get_result()
                 if result is not None:
-                    self.array = result
-                    QtWidgets.QMessageBox.information(
-                        self, "成功", f"{title}处理完成，正在更新视图..."
-                    )
-                    QtWidgets.QApplication.processEvents()
-                    self.update_viewers()
-                    QtWidgets.QMessageBox.information(self, "成功", "视图已更新")
+                    if hasattr(self, 'add_data_to_list'):
+                        data_name, data_item = self._create_enhanced_data_item(result, title)
+                        self.add_data_to_list(data_name, data_item)
+                        QtWidgets.QMessageBox.information(
+                            self,
+                            "成功",
+                            f"{title}处理完成，已生成新数据：\n{data_name}\n\n原始图像保持不变。"
+                        )
+                    else:
+                        self.array = result
+                        QtWidgets.QMessageBox.information(
+                            self, "成功", f"{title}处理完成，正在更新视图..."
+                        )
+                        QtWidgets.QApplication.processEvents()
+                        self.update_viewers()
+                        QtWidgets.QMessageBox.information(self, "成功", "视图已更新")
                 else:
                     QtWidgets.QMessageBox.warning(self, "警告", "处理未返回结果")
         except Exception as e:
@@ -61,3 +120,7 @@ class EnhancementOperations:
     def apply_fuzzy_enhancement(self):
         """应用基于光照补偿的模糊增强"""
         self._run_enhancement_dialog(FuzzyEnhancementDialog, "补偿模糊增强")
+
+    def apply_musica_enhancement(self):
+        """应用mUSICA增强"""
+        self._run_enhancement_dialog(MUSICADialog, "mUSICA增强")

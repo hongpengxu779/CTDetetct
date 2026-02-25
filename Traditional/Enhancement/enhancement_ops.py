@@ -5,14 +5,112 @@
 2. 限制对比度自适应直方图均衡化 (CLAHE)
 3. Retinex SSR (Single Scale Retinex)
 4. 去雾 (Dark Channel Prior Dehazing)
+5. mUSICA 增强 (Multi-scale Unsharp + Intelligent Contrast Adaptation)
 """
 
 import numpy as np
 import cv2
+import os
+import ctypes
+from pathlib import Path
 
 
 class EnhancementOps:
     """3D图像增强操作类"""
+
+    _imagemaster_dll = None
+    _imagemaster_musica_func = None
+    _imagemaster_load_failed = False
+
+    @staticmethod
+    def _resolve_imagemaster_dll_path() -> Path:
+        """解析 ImageMaster.dll 路径（支持环境变量与默认候选路径）"""
+        env_dll = os.environ.get("IMAGEMASTER_DLL_PATH", "").strip()
+        if env_dll:
+            p = Path(env_dll)
+            if p.is_file():
+                return p
+
+        env_dir = os.environ.get("IMAGEMASTER_DLL_DIR", "").strip()
+        if env_dir:
+            p = Path(env_dir) / "ImageMaster.dll"
+            if p.is_file():
+                return p
+
+        project_root = Path(__file__).resolve().parents[2]
+        candidates = [
+            project_root / "3rdParty" / "ImageMaster.dll",
+            Path(r"E:\xu\GTDRDetecion\3rdParty\ImageMaster.dll"),
+            Path(r"E:\xu\GTDRDetection\3rdParty\ImageMaster.dll"),
+            Path(r"E:\xu\GTDRDetecion\3rdParty") / "ImageMaster.dll",
+        ]
+
+        for p in candidates:
+            if p.is_file():
+                return p
+
+        raise FileNotFoundError("未找到 ImageMaster.dll")
+
+    @staticmethod
+    def _load_imagemaster_musica_func():
+        """加载 IM_MUSCIA_SSE 函数指针（仅Windows）"""
+        if EnhancementOps._imagemaster_musica_func is not None:
+            return EnhancementOps._imagemaster_musica_func
+        if EnhancementOps._imagemaster_load_failed:
+            return None
+        if os.name != "nt":
+            EnhancementOps._imagemaster_load_failed = True
+            return None
+
+        try:
+            dll_path = EnhancementOps._resolve_imagemaster_dll_path()
+            dll_dir = dll_path.parent
+
+            if hasattr(os, "add_dll_directory"):
+                os.add_dll_directory(str(dll_dir))
+                for sub in ("lib", "opencv", "qBreakpad", "QxOrm"):
+                    sub_dir = dll_dir / sub
+                    if sub_dir.is_dir():
+                        os.add_dll_directory(str(sub_dir))
+
+            dll = ctypes.WinDLL(str(dll_path))
+            func = dll.IM_MUSCIA_SSE
+            func.argtypes = [
+                ctypes.POINTER(ctypes.c_ushort),
+                ctypes.POINTER(ctypes.c_ushort),
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_int,
+            ]
+            func.restype = ctypes.c_int
+
+            EnhancementOps._imagemaster_dll = dll
+            EnhancementOps._imagemaster_musica_func = func
+            return func
+        except Exception:
+            EnhancementOps._imagemaster_load_failed = True
+            return None
+
+    @staticmethod
+    def _musica_slice_imagemaster(img_u16: np.ndarray, level: int, strength: int) -> np.ndarray:
+        """调用 ImageMaster.dll 的 IM_MUSCIA_SSE（失败抛异常）"""
+        func = EnhancementOps._load_imagemaster_musica_func()
+        if func is None:
+            raise RuntimeError("IM_MUSCIA_SSE 不可用")
+
+        src = np.ascontiguousarray(img_u16, dtype=np.uint16)
+        dst = np.zeros_like(src, dtype=np.uint16)
+        height, width = src.shape
+
+        src_ptr = src.ctypes.data_as(ctypes.POINTER(ctypes.c_ushort))
+        dst_ptr = dst.ctypes.data_as(ctypes.POINTER(ctypes.c_ushort))
+        status = int(func(src_ptr, dst_ptr, int(width), int(height), 1, int(level), int(strength)))
+        if status != 0:
+            raise RuntimeError(f"IM_MUSCIA_SSE 返回状态码: {status}")
+
+        return dst
 
     @staticmethod
     def _normalize_to_uint8(volume: np.ndarray) -> tuple:
@@ -266,3 +364,103 @@ class EnhancementOps:
         mean_b = cv2.boxFilter(b, -1, ksize)
 
         return mean_a * guide + mean_b
+
+    @staticmethod
+    def musica_3d(volume: np.ndarray,
+                  level: int = 3,
+                  strength: int = 50,
+                  progress_callback=None) -> np.ndarray:
+        """
+        mUSICA增强（Level/Strength 语义兼容版）
+
+        说明
+        ----
+        - 参数语义对齐 C++ 接口：mUSCIA(input, Level, Strength)
+        - 16位灰度优先处理，与 C++ reinterpret_cast<unsigned short*> 行为一致
+        - int16 数据直接按位解释为 uint16（等效于 +32768 偏移），不做线性缩放
+        - 逐切片进行多尺度细节增强
+        """
+        level = int(np.clip(level, 1, 8))
+        strength = int(np.clip(strength, 0, 100))
+
+        original_dtype = volume.dtype
+
+        # 与 C++ reinterpret_cast 行为一致
+        if original_dtype == np.uint16:
+            vol_u16 = np.asarray(volume, dtype=np.uint16)
+            conversion_mode = "direct"
+        elif original_dtype == np.int16:
+            # int16 -> uint16: 按位解释（等效于 C++ reinterpret_cast）
+            vol_u16 = volume.view(np.uint16)
+            conversion_mode = "view_int16"
+        else:
+            # 其他类型：尝试安全转换到 uint16 范围
+            vmin = float(volume.min())
+            vmax = float(volume.max())
+            if vmax - vmin < 1e-8:
+                vol_u16 = np.zeros(volume.shape, dtype=np.uint16)
+            else:
+                vol_u16 = ((volume.astype(np.float64) - vmin) / (vmax - vmin) * 65535.0).astype(np.uint16)
+            conversion_mode = "normalize"
+
+        result_u16 = np.zeros_like(vol_u16, dtype=np.uint16)
+        depth = vol_u16.shape[0]
+
+        musica_via_dll = EnhancementOps._load_imagemaster_musica_func()
+        use_dll = musica_via_dll is not None
+
+        for z in range(depth):
+            if use_dll:
+                try:
+                    result_u16[z] = EnhancementOps._musica_slice_imagemaster(vol_u16[z], level, strength)
+                except Exception:
+                    use_dll = False
+                    result_u16[z] = EnhancementOps._musica_slice_u16(vol_u16[z], level, strength)
+            else:
+                result_u16[z] = EnhancementOps._musica_slice_u16(vol_u16[z], level, strength)
+            if progress_callback and z % max(1, depth // 20) == 0:
+                progress_callback(z, depth)
+
+        # 根据转换模式还原到原始类型
+        if conversion_mode == "direct":
+            # uint16 直接返回
+            return result_u16
+        elif conversion_mode == "view_int16":
+            # int16: 按位解释回去（与输入对称）
+            return result_u16.view(np.int16)
+        else:
+            # normalize 模式：线性映射回原始范围
+            if vmax - vmin < 1e-8:
+                restored = np.full(volume.shape, vmin, dtype=np.float64)
+            else:
+                restored = result_u16.astype(np.float64) / 65535.0 * (vmax - vmin) + vmin
+
+            if np.issubdtype(original_dtype, np.integer):
+                info = np.iinfo(original_dtype)
+                restored = np.clip(restored, info.min, info.max)
+            return restored.astype(original_dtype)
+
+    @staticmethod
+    def _musica_slice_u16(img_u16: np.ndarray, level: int, strength: int) -> np.ndarray:
+        """单张16位灰度切片的 mUSICA 近似实现（Level/Strength 驱动）"""
+        src = img_u16.astype(np.float32) / 65535.0
+
+        # Level: 控制参与的尺度数量
+        # Strength: 控制细节增益
+        gain = 0.15 + (strength / 100.0) * 1.35
+
+        detail_acc = np.zeros_like(src, dtype=np.float32)
+        for idx in range(level):
+            sigma = 0.8 * (2.0 ** idx)
+            blur = cv2.GaussianBlur(src, (0, 0), sigma)
+            detail = src - blur
+            detail_acc += detail / float(idx + 1)
+
+        # 轻度局部对比度提升，避免过冲
+        local_sigma = 1.5 + level * 0.8
+        local_mean = cv2.GaussianBlur(src, (0, 0), local_sigma)
+        local_component = src - local_mean
+
+        out = src + gain * detail_acc + 0.25 * gain * local_component
+        out = np.clip(out, 0.0, 1.0)
+        return (out * 65535.0).astype(np.uint16)

@@ -10,8 +10,8 @@ from PyQt5 import QtWidgets, QtCore
 
 from AISegmeant.unet_segmentation_dialog import UnetSegmentationDialog
 from AISegmeant.segmentation_inference import UnetSegmentationInference
-from AISegmeant.sam3_segmentation_dialog import Sam3SegmentationDialog
-from AISegmeant.sam3_segmentation_inference import Sam3PreSegmentationInference
+from AISegmeant.sam2_segmentation_dialog import Sam2SegmentationDialog
+from AISegmeant.sam2_segmentation_inference import Sam2PreSegmentationInference
 from AISegmeant.image_overlay import create_overlay_from_files
 
 
@@ -248,8 +248,8 @@ class AIOperations:
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "错误", f"运行UNet分割程序时出错：{str(e)}")
 
-    def run_sam3_presegmentation(self):
-        """运行SAM3预分割"""
+    def run_sam2_presegmentation(self):
+        """运行SAM2预分割"""
         try:
             current_data = None
             if hasattr(self, 'image') and self.image is not None and hasattr(self, 'array') and self.array is not None:
@@ -259,14 +259,14 @@ class AIOperations:
                     'spacing': self.spacing if hasattr(self, 'spacing') else (1.0, 1.0, 1.0)
                 }
 
-            dialog = Sam3SegmentationDialog(self, current_data=current_data)
+            dialog = Sam2SegmentationDialog(self, current_data=current_data)
             if dialog.exec_() != QtWidgets.QDialog.Accepted:
                 return
 
             params = dialog.get_parameters()
 
-            progress = QtWidgets.QProgressDialog("正在执行SAM3预分割，请稍候...", None, 0, 100, self)
-            progress.setWindowTitle("SAM3预分割进度")
+            progress = QtWidgets.QProgressDialog("正在执行SAM2预分割，请稍候...", None, 0, 100, self)
+            progress.setWindowTitle("SAM2预分割进度")
             progress.setWindowModality(QtCore.Qt.WindowModal)
             progress.setCancelButton(None)
             progress.setValue(0)
@@ -274,10 +274,10 @@ class AIOperations:
             QtWidgets.QApplication.processEvents()
 
             try:
-                inferencer = Sam3PreSegmentationInference(
+                inferencer = Sam2PreSegmentationInference(
                     checkpoint_path=params['checkpoint_path'],
                     output_dir=params['output_dir'],
-                    model_type=params['model_type'],
+                    model_cfg=params['model_cfg'],
                     points_per_side=params['points_per_side'],
                     pred_iou_thresh=params['pred_iou_thresh'],
                     stability_score_thresh=params['stability_score_thresh'],
@@ -291,7 +291,7 @@ class AIOperations:
                 affine_matrix = None
                 if params['use_current_data']:
                     data = params['current_data']
-                    output_filename = "current_data_sam3_preseg.nii.gz"
+                    output_filename = "current_data_sam2_preseg.nii.gz"
                     affine_matrix = self._build_affine_from_sitk_image(data['image'])
                     result_path = inferencer.run_from_array(
                         data['array'],
@@ -300,7 +300,7 @@ class AIOperations:
                         progress_callback=on_progress,
                     )
                 else:
-                    output_filename = self._derive_nifti_output_name(params['input_file'], '_sam3_preseg')
+                    output_filename = self._derive_nifti_output_name(params['input_file'], '_sam2_preseg')
                     result_path = inferencer.run(
                         params['input_file'],
                         output_filename=output_filename,
@@ -313,9 +313,9 @@ class AIOperations:
                 if params['overlay_with_original']:
                     try:
                         if params['use_current_data']:
-                            overlay_filename = "current_data_sam3_overlay.nii.gz"
+                            overlay_filename = "current_data_sam2_overlay.nii.gz"
                         else:
-                            overlay_filename = self._derive_nifti_output_name(params['input_file'], '_sam3_overlay')
+                            overlay_filename = self._derive_nifti_output_name(params['input_file'], '_sam2_overlay')
                         overlay_path = os.path.join(params['output_dir'], overlay_filename)
 
                         overlay_progress = QtWidgets.QProgressDialog("正在创建融合图像...", None, 0, 0, self)
@@ -357,8 +357,8 @@ class AIOperations:
 
                         reply = QtWidgets.QMessageBox.question(
                             self,
-                            "SAM3预分割完成",
-                            f"SAM3预分割完成！\n\n"
+                            "SAM2预分割完成",
+                            f"SAM2预分割完成！\n\n"
                             f"• 预分割结果: {result_path}\n"
                             f"• 融合图像: {overlay_path}\n\n"
                             f"选择要加载的图像：\n"
@@ -380,8 +380,8 @@ class AIOperations:
                         )
                         reply = QtWidgets.QMessageBox.question(
                             self,
-                            "SAM3预分割完成",
-                            f"SAM3预分割完成！结果已保存到：\n{result_path}\n\n是否加载预分割结果？",
+                            "SAM2预分割完成",
+                            f"SAM2预分割完成！结果已保存到：\n{result_path}\n\n是否加载预分割结果？",
                             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
                         )
                         if reply == QtWidgets.QMessageBox.Yes:
@@ -389,8 +389,8 @@ class AIOperations:
                 else:
                     reply = QtWidgets.QMessageBox.question(
                         self,
-                        "SAM3预分割完成",
-                        f"SAM3预分割完成！结果已保存到：\n{result_path}\n\n是否加载预分割结果？",
+                        "SAM2预分割完成",
+                        f"SAM2预分割完成！结果已保存到：\n{result_path}\n\n是否加载预分割结果？",
                         QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
                     )
                     if reply == QtWidgets.QMessageBox.Yes:
@@ -400,13 +400,13 @@ class AIOperations:
                 progress.close()
                 QtWidgets.QMessageBox.critical(
                     self,
-                    "SAM3预分割错误",
-                    f"执行SAM3预分割时出错：{str(e)}\n\n请检查：\n"
-                    f"1. 模型权重文件与模型类型是否匹配\n"
+                    "SAM2预分割错误",
+                    f"执行SAM2预分割时出错：{str(e)}\n\n请检查：\n"
+                    f"1. SAM2配置文件与checkpoint是否匹配\n"
                     f"2. 输入数据格式是否正确\n"
-                    f"3. 是否安装了依赖包(segment-anything, torch, opencv-python)"
+                    f"3. 是否安装了依赖包(sam2, torch, torchvision, hydra-core)"
                 )
 
         except Exception as e:
-            QtWidgets.QMessageBox.critical(self, "错误", f"运行SAM3预分割时出错：{str(e)}")
+            QtWidgets.QMessageBox.critical(self, "错误", f"运行SAM2预分割时出错：{str(e)}")
 
