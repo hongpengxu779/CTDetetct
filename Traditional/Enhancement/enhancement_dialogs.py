@@ -689,26 +689,31 @@ class DehazeDialog(_BaseEnhancementDialog):
 # ===== 5. mUSICA 对话框 =====
 
 class MUSICADialog(_BaseEnhancementDialog):
-    """mUSICA增强对话框"""
+    """mUSICA增强对话框 - 完全模拟导出切片→处理→重组的流程"""
 
     def __init__(self, image_array, parent=None):
         super().__init__("mUSICA 增强", image_array, parent)
+        
+        # 保存原始输入数据（未转换）
+        self._original_input = image_array
 
         self.level_spin = QtWidgets.QSpinBox()
         self.level_spin.setRange(1, 8)
-        self.level_spin.setValue(3)
+        self.level_spin.setValue(8)
         self.level_spin.valueChanged.connect(self._on_param_changed)
         self.params_layout.addRow("Level:", self.level_spin)
 
         self.strength_spin = QtWidgets.QSpinBox()
         self.strength_spin.setRange(0, 100)
-        self.strength_spin.setValue(50)
+        self.strength_spin.setValue(100)
         self.strength_spin.valueChanged.connect(self._on_param_changed)
         self.params_layout.addRow("Strength:", self.strength_spin)
 
         info = QtWidgets.QLabel(
-            "参数语义对齐 C++ 接口：mUSCIA(input, Level, Strength)。\n"
-            "优先调用 ImageMaster.dll 的 IM_MUSCIA_SSE；若不可用则自动回退内置实现。\n"
+            "完全模拟导出切片→mUSICA处理→重组的流程：\n"
+            "1. 逐切片转换为 uint16（与导出TIFF一致）\n"
+            "2. 调用 ImageMaster.dll 的 IM_MUSCIA_SSE 处理\n"
+            "3. 重新组合为3D体数据\n"
             "Level 控制多尺度层数，Strength 控制增强强度。"
         )
         info.setWordWrap(True)
@@ -716,12 +721,60 @@ class MUSICADialog(_BaseEnhancementDialog):
         self.params_layout.addRow(info)
 
     def _process_volume(self, volume, progress_callback=None):
-        return EnhancementOps.musica_3d(
-            volume,
-            level=self.level_spin.value(),
-            strength=self.strength_spin.value(),
-            progress_callback=progress_callback,
-        )
+        """
+        完全模拟导出切片→处理→重组的流程
+        
+        流程：
+        1. 逐切片: slice.astype(np.uint16) - 与 export_slices 中的转换完全一致
+        2. 调用 DLL: _musica_slice_imagemaster(slice_u16, level, strength)
+        3. 收集所有处理后的切片，组合成3D数组
+        """
+        level = self.level_spin.value()
+        strength = self.strength_spin.value()
+        
+        depth = volume.shape[0]
+        result_slices = []
+        
+        # 检查 DLL 是否可用
+        dll_func = EnhancementOps._load_imagemaster_musica_func()
+        use_dll = dll_func is not None
+        
+        print(f"[mUSICA模拟导出流程] 输入: dtype={volume.dtype}, shape={volume.shape}")
+        print(f"[mUSICA模拟导出流程] 参数: Level={level}, Strength={strength}")
+        print(f"[mUSICA模拟导出流程] 使用DLL: {'是' if use_dll else '否'}")
+        
+        for z in range(depth):
+            # Step 1: 模拟导出 - 与 export_slices 中的 arr.astype(np.uint16) 完全一致
+            slice_original = volume[z]
+            slice_u16 = slice_original.astype(np.uint16)
+            
+            # Step 2: 调用 DLL 处理
+            if use_dll:
+                try:
+                    slice_processed = EnhancementOps._musica_slice_imagemaster(
+                        slice_u16, level, strength
+                    )
+                except Exception as e:
+                    print(f"[mUSICA] 切片 {z} DLL失败，使用回退: {e}")
+                    slice_processed = EnhancementOps._musica_slice_u16(
+                        slice_u16, level, strength
+                    )
+            else:
+                slice_processed = EnhancementOps._musica_slice_u16(
+                    slice_u16, level, strength
+                )
+            
+            result_slices.append(slice_processed)
+            
+            if progress_callback and z % max(1, depth // 20) == 0:
+                progress_callback(z, depth)
+        
+        # Step 3: 重组为3D数组
+        result = np.stack(result_slices, axis=0)
+        print(f"[mUSICA模拟导出流程] 输出: dtype={result.dtype}, shape={result.shape}")
+        print(f"[mUSICA模拟导出流程] 输出范围: [{result.min()}, {result.max()}]")
+        
+        return result
 
     def accept(self):
         try:
@@ -729,7 +782,7 @@ class MUSICADialog(_BaseEnhancementDialog):
                 self.result_array = self._apply_blend_if_enabled(self._preview_volume)
             else:
                 progress = QtWidgets.QProgressDialog(
-                    "正在进行mUSICA增强...", "取消", 0, 100, self)
+                    "正在进行mUSICA增强（模拟导出流程）...", "取消", 0, 100, self)
                 progress.setWindowModality(QtCore.Qt.WindowModal)
                 progress.show()
 

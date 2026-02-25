@@ -817,7 +817,23 @@ class DataLoader:
         prefix: str
             每个切片文件的前缀
         """
-        arr = self.raw_array
+        # 优先从数据列表获取当前选中项的数据（与 mUSICA 一致）
+        arr = None
+        if hasattr(self, 'data_list_widget') and self.data_list_widget is not None:
+            from PyQt5 import QtCore
+            current_item = self.data_list_widget.currentItem()
+            if current_item is not None:
+                data_item = current_item.data(QtCore.Qt.UserRole)
+                if isinstance(data_item, dict) and 'array' in data_item:
+                    arr = data_item['array']
+                    print(f"[导出切片] 从数据列表获取: dtype={arr.dtype}, shape={arr.shape}")
+        
+        # 回退到 self.raw_array
+        if arr is None:
+            arr = self.raw_array
+            if arr is not None:
+                print(f"[导出切片] 使用 self.raw_array: dtype={arr.dtype}, shape={arr.shape}")
+        
         if arr is None:
             raise RuntimeError('没有原始数组可导出')
 

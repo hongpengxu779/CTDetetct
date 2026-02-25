@@ -481,8 +481,41 @@ class UIComponents:
         file_menu.addAction(import_action)
 
         save_session_action = QtWidgets.QAction("保存会话...", self)
+        save_session_action.setShortcut("Ctrl+S")
         save_session_action.triggered.connect(self.save_current_session)
         file_menu.addAction(save_session_action)
+
+        load_session_action = QtWidgets.QAction("加载会话...", self)
+        load_session_action.setShortcut("Ctrl+O")
+        load_session_action.triggered.connect(self.load_session)
+        file_menu.addAction(load_session_action)
+
+        file_menu.addSeparator()
+
+        # 导出子菜单
+        export_menu = file_menu.addMenu("导出")
+
+        export_nifti_action = QtWidgets.QAction("导出 NIfTI...", self)
+        export_nifti_action.triggered.connect(self.export_current_layer)
+        export_menu.addAction(export_nifti_action)
+
+        export_dicom_action = QtWidgets.QAction("导出 DICOM 序列...", self)
+        export_dicom_action.triggered.connect(self.export_dicom_series)
+        export_menu.addAction(export_dicom_action)
+
+        export_raw_mhd_action = QtWidgets.QAction("导出 RAW/MHD...", self)
+        export_raw_mhd_action.triggered.connect(self.export_raw_mhd)
+        export_menu.addAction(export_raw_mhd_action)
+
+        export_menu.addSeparator()
+
+        export_slices_tiff_action = QtWidgets.QAction("导出切片为TIFF...", self)
+        export_slices_tiff_action.triggered.connect(lambda: getattr(self, 'export_slices_dialog', lambda: None)())
+        export_menu.addAction(export_slices_tiff_action)
+
+        export_slices_images_action = QtWidgets.QAction("导出切片为图片...", self)
+        export_slices_images_action.triggered.connect(self.export_slices_as_images)
+        export_menu.addAction(export_slices_images_action)
 
         file_menu.addSeparator()
 
@@ -490,16 +523,6 @@ class UIComponents:
         import_dicom_action.triggered.connect(self.import_dicom_series)
         file_menu.addAction(import_dicom_action)
 
-        export_dicom_action = QtWidgets.QAction("导出 DICOM...", self)
-        export_dicom_action.triggered.connect(self.export_dicom_series)
-        file_menu.addAction(export_dicom_action)
-
-        # 新增：导出切片为 TIFF（无符号16位）
-        export_slices_action = QtWidgets.QAction("导出切片为TIFF...", self)
-        export_slices_action.triggered.connect(lambda: getattr(self, 'export_slices_dialog', lambda: None)())
-        file_menu.addAction(export_slices_action)
-
-        # 新增：从切片重建体数据
         import_slices_action = QtWidgets.QAction("从切片重建...", self)
         import_slices_action.triggered.connect(lambda: getattr(self, 'import_slices_dialog', lambda: None)())
         file_menu.addAction(import_slices_action)
@@ -3349,13 +3372,143 @@ class UIComponents:
         QtWidgets.QMessageBox.information(self, "首选项", "首选项面板将用于配置快捷键、主题与默认路径。")
 
     def save_current_session(self):
-        QtWidgets.QMessageBox.information(self, "保存会话", "当前版本已保留界面入口，后续可扩展会话序列化。")
+        """保存当前会话到文件"""
+        from .save_export import SessionManager
+        
+        filepath, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "保存会话",
+            "session.ctsession",
+            "CT会话文件 (*.ctsession);;所有文件 (*)"
+        )
+        if not filepath:
+            return
+        
+        if not filepath.endswith('.ctsession'):
+            filepath += '.ctsession'
+        
+        # 询问是否包含数据
+        include_data = QtWidgets.QMessageBox.question(
+            self,
+            "保存选项",
+            "是否保存原始数据？\n\n选择'是'将保存完整数据（文件较大）。\n选择'否'仅保存视图状态。",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.Yes
+        ) == QtWidgets.QMessageBox.Yes
+        
+        progress = QtWidgets.QProgressDialog("正在保存会话...", None, 0, 0, self)
+        progress.setWindowModality(QtCore.Qt.WindowModal)
+        progress.show()
+        QtWidgets.QApplication.processEvents()
+        
+        success = SessionManager.save_session(self, filepath, include_data=include_data)
+        
+        progress.close()
+        
+        if success:
+            self.statusBar().showMessage(f"会话已保存: {filepath}", 3000)
+        else:
+            QtWidgets.QMessageBox.critical(self, "保存失败", "保存会话时发生错误")
+    
+    def load_session(self):
+        """加载会话文件"""
+        from .save_export import SessionManager
+        
+        filepath, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "加载会话",
+            "",
+            "CT会话文件 (*.ctsession);;所有文件 (*)"
+        )
+        if not filepath:
+            return
+        
+        progress = QtWidgets.QProgressDialog("正在加载会话...", None, 0, 0, self)
+        progress.setWindowModality(QtCore.Qt.WindowModal)
+        progress.show()
+        QtWidgets.QApplication.processEvents()
+        
+        success, msg = SessionManager.load_session(self, filepath)
+        
+        progress.close()
+        
+        if success:
+            self.statusBar().showMessage(msg, 3000)
+        else:
+            QtWidgets.QMessageBox.critical(self, "加载失败", msg)
 
     def import_dicom_series(self):
         self.import_file()
 
     def export_dicom_series(self):
-        QtWidgets.QMessageBox.information(self, "导出DICOM", "当前版本未实现DICOM导出算法，已预留接口。")
+        """导出当前数据为DICOM序列"""
+        from .save_export import ExportDialogs
+        
+        # 获取当前数据
+        arr = None
+        if hasattr(self, 'data_list_widget') and self.data_list_widget is not None:
+            current_item = self.data_list_widget.currentItem()
+            if current_item is not None:
+                data_item = current_item.data(QtCore.Qt.UserRole)
+                if isinstance(data_item, dict) and 'array' in data_item:
+                    arr = data_item['array']
+        
+        if arr is None and hasattr(self, 'raw_array') and self.raw_array is not None:
+            arr = self.raw_array
+        
+        if arr is None:
+            QtWidgets.QMessageBox.warning(self, "导出失败", "没有可用的数据来导出")
+            return
+        
+        spacing = getattr(self, 'spacing', None)
+        ExportDialogs.show_dicom_export_dialog(self, arr, spacing)
+    
+    def export_raw_mhd(self):
+        """导出当前数据为RAW/MHD格式"""
+        from .save_export import ExportDialogs
+        
+        # 获取当前数据
+        arr = None
+        if hasattr(self, 'data_list_widget') and self.data_list_widget is not None:
+            current_item = self.data_list_widget.currentItem()
+            if current_item is not None:
+                data_item = current_item.data(QtCore.Qt.UserRole)
+                if isinstance(data_item, dict) and 'array' in data_item:
+                    arr = data_item['array']
+        
+        if arr is None and hasattr(self, 'raw_array') and self.raw_array is not None:
+            arr = self.raw_array
+        
+        if arr is None:
+            QtWidgets.QMessageBox.warning(self, "导出失败", "没有可用的数据来导出")
+            return
+        
+        spacing = getattr(self, 'spacing', None)
+        ExportDialogs.show_raw_mhd_export_dialog(self, arr, spacing)
+    
+    def export_slices_as_images(self):
+        """导出切片为图片序列（PNG/JPEG/TIFF/BMP）"""
+        from .save_export import ExportDialogs
+        
+        # 获取当前数据
+        arr = None
+        if hasattr(self, 'data_list_widget') and self.data_list_widget is not None:
+            current_item = self.data_list_widget.currentItem()
+            if current_item is not None:
+                data_item = current_item.data(QtCore.Qt.UserRole)
+                if isinstance(data_item, dict) and 'array' in data_item:
+                    arr = data_item['array']
+        
+        if arr is None and hasattr(self, 'raw_array') and self.raw_array is not None:
+            arr = self.raw_array
+        
+        if arr is None:
+            QtWidgets.QMessageBox.warning(self, "导出失败", "没有可用的数据来导出")
+            return
+        
+        ww = getattr(self, 'window_width', None)
+        wc = getattr(self, 'window_center', None)
+        ExportDialogs.show_image_export_dialog(self, arr, ww, wc)
 
     def open_python_console(self):
         QtWidgets.QMessageBox.information(self, "Python脚本", "已预留Python脚本控制台入口。")

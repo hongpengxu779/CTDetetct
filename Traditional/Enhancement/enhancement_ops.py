@@ -367,8 +367,8 @@ class EnhancementOps:
 
     @staticmethod
     def musica_3d(volume: np.ndarray,
-                  level: int = 3,
-                  strength: int = 50,
+                  level: int = 8,
+                  strength: int = 100,
                   progress_callback=None) -> np.ndarray:
         """
         mUSICA增强（Level/Strength 语义兼容版）
@@ -376,6 +376,7 @@ class EnhancementOps:
         说明
         ----
         - 参数语义对齐 C++ 接口：mUSCIA(input, Level, Strength)
+        - 默认参数与 C++ 版本一致：Level=8, Strength=100
         - 16位灰度优先处理，与 C++ reinterpret_cast<unsigned short*> 行为一致
         - int16 数据直接按位解释为 uint16（等效于 +32768 偏移），不做线性缩放
         - 逐切片进行多尺度细节增强
@@ -408,6 +409,13 @@ class EnhancementOps:
 
         musica_via_dll = EnhancementOps._load_imagemaster_musica_func()
         use_dll = musica_via_dll is not None
+
+        # 调试输出
+        print("[mUSICA] 参数: Level=%d, Strength=%d" % (level, strength))
+        print("[mUSICA] 输入: dtype=%s, shape=%s" % (original_dtype, volume.shape))
+        print("[mUSICA] 转换模式: %s" % conversion_mode)
+        print("[mUSICA] 处理数据(uint16): min=%d, max=%d" % (vol_u16.min(), vol_u16.max()))
+        print("[mUSICA] 使用DLL: %s" % ("是" if use_dll else "否(回退Python实现)"))
 
         for z in range(depth):
             if use_dll:

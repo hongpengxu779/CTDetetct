@@ -122,5 +122,56 @@ class EnhancementOperations:
         self._run_enhancement_dialog(FuzzyEnhancementDialog, "补偿模糊增强")
 
     def apply_musica_enhancement(self):
-        """应用mUSICA增强"""
-        self._run_enhancement_dialog(MUSICADialog, "mUSICA增强")
+        """应用mUSICA增强 - 完全模拟导出切片→处理→重组的流程"""
+        # 从数据列表获取当前选中项的原始数据
+        source_array = None
+        
+        if hasattr(self, 'data_list_widget') and self.data_list_widget is not None:
+            current_item = self.data_list_widget.currentItem()
+            if current_item is not None:
+                data_item = current_item.data(QtCore.Qt.UserRole)
+                if isinstance(data_item, dict) and 'array' in data_item:
+                    source_array = data_item['array']
+                    print(f"[mUSICA入口] 从数据列表获取: dtype={source_array.dtype}, shape={source_array.shape}")
+        
+        # 回退到 self.array
+        if source_array is None:
+            if hasattr(self, 'array') and self.array is not None:
+                source_array = self.array
+                print(f"[mUSICA入口] 使用 self.array: dtype={source_array.dtype}, shape={source_array.shape}")
+        
+        if source_array is None:
+            QtWidgets.QMessageBox.warning(self, "警告", "请先加载数据")
+            return
+
+        try:
+            # 直接传入原始数据，对话框内部会模拟导出流程进行处理
+            dialog = MUSICADialog(source_array, parent=self)
+
+            if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                result = dialog.get_result()
+                if result is not None:
+                    if hasattr(self, 'add_data_to_list'):
+                        data_name, data_item = self._create_enhanced_data_item(result, "mUSICA增强")
+                        self.add_data_to_list(data_name, data_item)
+                        QtWidgets.QMessageBox.information(
+                            self,
+                            "成功",
+                            f"mUSICA增强处理完成，已生成新数据：\n{data_name}\n\n原始图像保持不变。"
+                        )
+                    else:
+                        self.array = result
+                        QtWidgets.QMessageBox.information(
+                            self, "成功", "mUSICA增强处理完成，正在更新视图..."
+                        )
+                        QtWidgets.QApplication.processEvents()
+                        self.update_viewers()
+                        QtWidgets.QMessageBox.information(self, "成功", "视图已更新")
+                else:
+                    QtWidgets.QMessageBox.warning(self, "警告", "处理未返回结果")
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(
+                self, "错误", f"应用mUSICA增强时出错：{str(e)}"
+            )
