@@ -246,6 +246,13 @@ class DataLoader:
             self.rgb_array = temp_rgb_array
             self.raw_array = temp_array
             self.is_segmentation = is_segmentation  # 保存分割结果标志
+            self.annotation_enabled = False
+            self.annotation_mode = 'brush'
+            self.annotation_volume = np.zeros(self.array.shape, dtype=np.uint16) if len(self.array.shape) == 3 else None
+            self.annotation_drawn_mask = np.zeros(self.array.shape, dtype=bool) if len(self.array.shape) == 3 else None
+            self.annotation_overlay_color = (255, 60, 60)
+            self.annotation_overlay_alpha = 110
+            self.annotation_label_colors = {}
             print(f"raw_array已设置，形状: {self.raw_array.shape}")
 
             if hasattr(self, 'prop_size_label'):

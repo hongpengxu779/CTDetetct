@@ -6,6 +6,9 @@ CT查看器UI组件
 from PyQt5 import QtWidgets, QtCore, QtGui
 import numpy as np
 import SimpleITK as sitk
+import os
+import tempfile
+from datetime import datetime
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib
@@ -386,6 +389,11 @@ class UIComponents:
         segment_action.triggered.connect(self.run_unet_segmentation)
         primary_toolbar.addAction(segment_action)
 
+        sam3_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowForward), "SAM3预分割", self)
+        sam3_action.setToolTip("SAM3预分割")
+        sam3_action.triggered.connect(self.run_sam3_presegmentation)
+        primary_toolbar.addAction(sam3_action)
+
         # 视图/测量快捷（与第一组同排）
         secondary_toolbar = QtWidgets.QToolBar("显示工具栏", self)
         secondary_toolbar.setMovable(False)
@@ -687,6 +695,15 @@ class UIComponents:
         unet_action = QtWidgets.QAction("基线方法", self)
         unet_action.triggered.connect(self.run_unet_segmentation)
         ai_menu.addAction(unet_action)
+        sam3_preseg_action = QtWidgets.QAction("SAM3预分割", self)
+        sam3_preseg_action.triggered.connect(self.run_sam3_presegmentation)
+        ai_menu.addAction(sam3_preseg_action)
+        ml_seg_action = QtWidgets.QAction("机器学习分割（KNN/集成）", self)
+        ml_seg_action.triggered.connect(self.run_ml_segmentation)
+        ai_menu.addAction(ml_seg_action)
+        label_create_action = QtWidgets.QAction("交互创建标签文件", self)
+        label_create_action.triggered.connect(self.run_label_file_creator)
+        ai_menu.addAction(label_create_action)
         
         # 配准菜单（占位）
         config_menu = tools_menu.addMenu("配准")
@@ -771,8 +788,8 @@ class UIComponents:
         
         # 创建左侧工具栏（垂直布局）
         self.left_toolbar = QtWidgets.QWidget()
-        self.left_toolbar.setMaximumWidth(230)
-        self.left_toolbar.setMinimumWidth(190)
+        self.left_toolbar.setMaximumWidth(520)
+        self.left_toolbar.setMinimumWidth(210)
         self.left_toolbar.setStyleSheet("""
             QWidget {
                 background-color: #303030;
@@ -791,13 +808,23 @@ class UIComponents:
         # ------------------------ 主控台标签页 ------------------------
         main_console = QtWidgets.QWidget()
         main_console_layout = QtWidgets.QVBoxLayout(main_console)
-        main_console_layout.setContentsMargins(2, 2, 2, 2)
-        main_console_layout.setSpacing(4)
+        main_console_layout.setContentsMargins(4, 4, 4, 4)
+        main_console_layout.setSpacing(6)
+
+        def _make_console_button(text, callback):
+            btn = QtWidgets.QToolButton()
+            btn.setText(text)
+            btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+            btn.clicked.connect(callback)
+            btn.setMinimumHeight(24)
+            btn.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+            return btn
 
         # 操作区
         ops_group = QtWidgets.QGroupBox("操作区")
         ops_layout = QtWidgets.QGridLayout(ops_group)
-        ops_layout.setSpacing(4)
+        ops_layout.setHorizontalSpacing(6)
+        ops_layout.setVerticalSpacing(6)
         ops_buttons = [
             ("平移", self.set_pan_mode),
             ("缩放", self.set_zoom_mode),
@@ -809,42 +836,28 @@ class UIComponents:
             ("下一切片", self.goto_next_slice),
         ]
         for idx, (text, callback) in enumerate(ops_buttons):
-            btn = QtWidgets.QToolButton()
-            btn.setText(text)
-            btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
-            btn.clicked.connect(callback)
-            btn.setMinimumHeight(20)
-            btn.setMinimumWidth(44)
-            ops_layout.addWidget(btn, idx // 4, idx % 4)
+            btn = _make_console_button(text, callback)
+            ops_layout.addWidget(btn, idx // 2, idx % 2)
+        ops_layout.setColumnStretch(0, 1)
+        ops_layout.setColumnStretch(1, 1)
         main_console_layout.addWidget(ops_group)
 
         # 翻转/旋转面板
         flip_rotate_group = QtWidgets.QGroupBox("翻转/旋转")
         flip_rotate_layout = QtWidgets.QGridLayout(flip_rotate_group)
-        flip_rotate_layout.setSpacing(4)
+        flip_rotate_layout.setHorizontalSpacing(6)
+        flip_rotate_layout.setVerticalSpacing(6)
 
-        flip_h_btn = QtWidgets.QToolButton()
-        flip_h_btn.setText("水平翻转")
-        flip_h_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
-        flip_h_btn.clicked.connect(self.flip_current_view_horizontal)
+        flip_h_btn = _make_console_button("水平翻转", self.flip_current_view_horizontal)
         flip_rotate_layout.addWidget(flip_h_btn, 0, 0)
 
-        flip_v_btn = QtWidgets.QToolButton()
-        flip_v_btn.setText("垂直翻转")
-        flip_v_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
-        flip_v_btn.clicked.connect(self.flip_current_view_vertical)
+        flip_v_btn = _make_console_button("垂直翻转", self.flip_current_view_vertical)
         flip_rotate_layout.addWidget(flip_v_btn, 0, 1)
 
-        rot_cw_90_btn = QtWidgets.QToolButton()
-        rot_cw_90_btn.setText("旋转+90°")
-        rot_cw_90_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
-        rot_cw_90_btn.clicked.connect(self.rotate_current_view_cw_90)
+        rot_cw_90_btn = _make_console_button("旋转+90°", self.rotate_current_view_cw_90)
         flip_rotate_layout.addWidget(rot_cw_90_btn, 1, 0)
 
-        rot_ccw_90_btn = QtWidgets.QToolButton()
-        rot_ccw_90_btn.setText("旋转-90°")
-        rot_ccw_90_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
-        rot_ccw_90_btn.clicked.connect(self.rotate_current_view_ccw_90)
+        rot_ccw_90_btn = _make_console_button("旋转-90°", self.rotate_current_view_ccw_90)
         flip_rotate_layout.addWidget(rot_ccw_90_btn, 1, 1)
 
         angle_label = QtWidgets.QLabel("角度")
@@ -853,19 +866,16 @@ class UIComponents:
         self.rotate_step_spin.setRange(1, 180)
         self.rotate_step_spin.setValue(10)
         self.rotate_step_spin.setSuffix("°")
+        self.rotate_step_spin.setMinimumHeight(24)
         flip_rotate_layout.addWidget(self.rotate_step_spin, 2, 1)
 
-        rot_cw_btn = QtWidgets.QToolButton()
-        rot_cw_btn.setText("顺时针")
-        rot_cw_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
-        rot_cw_btn.clicked.connect(lambda: self.rotate_current_view_by_step(True))
+        rot_cw_btn = _make_console_button("顺时针", lambda: self.rotate_current_view_by_step(True))
         flip_rotate_layout.addWidget(rot_cw_btn, 3, 0)
 
-        rot_ccw_btn = QtWidgets.QToolButton()
-        rot_ccw_btn.setText("逆时针")
-        rot_ccw_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
-        rot_ccw_btn.clicked.connect(lambda: self.rotate_current_view_by_step(False))
+        rot_ccw_btn = _make_console_button("逆时针", lambda: self.rotate_current_view_by_step(False))
         flip_rotate_layout.addWidget(rot_ccw_btn, 3, 1)
+        flip_rotate_layout.setColumnStretch(0, 1)
+        flip_rotate_layout.setColumnStretch(1, 1)
 
         main_console_layout.addWidget(flip_rotate_group)
 
@@ -879,7 +889,8 @@ class UIComponents:
         # 标注区
         annotation_group = QtWidgets.QGroupBox("标注区")
         annotation_layout = QtWidgets.QGridLayout(annotation_group)
-        annotation_layout.setSpacing(4)
+        annotation_layout.setHorizontalSpacing(6)
+        annotation_layout.setVerticalSpacing(6)
         annotation_buttons = [
             ("画笔", self.start_brush_annotation),
             ("橡皮擦", self.start_eraser_annotation),
@@ -891,13 +902,54 @@ class UIComponents:
             ("文本", self.add_text_annotation),
         ]
         for idx, (text, callback) in enumerate(annotation_buttons):
-            btn = QtWidgets.QToolButton()
-            btn.setText(text)
-            btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
-            btn.clicked.connect(callback)
-            btn.setMinimumHeight(20)
-            btn.setMinimumWidth(44)
-            annotation_layout.addWidget(btn, idx // 4, idx % 4)
+            btn = _make_console_button(text, callback)
+            annotation_layout.addWidget(btn, idx // 2, idx % 2)
+        annotation_layout.setColumnStretch(0, 1)
+        annotation_layout.setColumnStretch(1, 1)
+
+        annotation_form = QtWidgets.QFormLayout()
+        annotation_form.setLabelAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+        annotation_form.setFormAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
+        annotation_form.setHorizontalSpacing(8)
+        annotation_form.setVerticalSpacing(6)
+
+        param_row_1 = QtWidgets.QHBoxLayout()
+        self.annotation_label_spin = QtWidgets.QSpinBox()
+        self.annotation_label_spin.setRange(0, 255)
+        self.annotation_label_spin.setValue(0)
+        self.annotation_label_spin.setMaximumWidth(72)
+        self.annotation_label_spin.setMinimumHeight(24)
+        self.annotation_label_spin.valueChanged.connect(self._on_annotation_label_changed)
+        param_row_1.addWidget(self.annotation_label_spin)
+        param_row_1.addSpacing(8)
+        param_row_1.addWidget(QtWidgets.QLabel("半径"))
+        self.annotation_brush_radius_spin = QtWidgets.QSpinBox()
+        self.annotation_brush_radius_spin.setRange(1, 30)
+        self.annotation_brush_radius_spin.setValue(3)
+        self.annotation_brush_radius_spin.setMaximumWidth(72)
+        self.annotation_brush_radius_spin.setMinimumHeight(24)
+        param_row_1.addWidget(self.annotation_brush_radius_spin)
+        param_row_1.addStretch()
+        annotation_form.addRow("标签值", param_row_1)
+
+        self.annotation_name_edit = QtWidgets.QLineEdit()
+        self.annotation_name_edit.setPlaceholderText("例如：缺陷A")
+        self.annotation_name_edit.setMinimumHeight(24)
+        annotation_form.addRow("标签名", self.annotation_name_edit)
+
+        action_row = QtWidgets.QHBoxLayout()
+        clear_annotation_btn = QtWidgets.QPushButton("清空标注")
+        clear_annotation_btn.clicked.connect(self.clear_annotation_volume)
+        clear_annotation_btn.setMinimumHeight(24)
+        action_row.addWidget(clear_annotation_btn)
+
+        save_annotation_btn = QtWidgets.QPushButton("保存标签")
+        save_annotation_btn.clicked.connect(self.save_annotation_as_label_file)
+        save_annotation_btn.setMinimumHeight(24)
+        action_row.addWidget(save_annotation_btn)
+        annotation_form.addRow("操作", action_row)
+
+        annotation_layout.addLayout(annotation_form, 4, 0, 1, 2)
         main_console_layout.addWidget(annotation_group)
 
         sep2 = QtWidgets.QFrame()
@@ -1210,6 +1262,12 @@ class UIComponents:
         ai_auto_btn = QtWidgets.QPushButton("一键自动分割")
         ai_auto_btn.clicked.connect(self.run_unet_segmentation)
         ai_seg_layout.addWidget(ai_auto_btn)
+        sam3_preseg_btn = QtWidgets.QPushButton("SAM3预分割")
+        sam3_preseg_btn.clicked.connect(self.run_sam3_presegmentation)
+        ai_seg_layout.addWidget(sam3_preseg_btn)
+        ml_seg_btn = QtWidgets.QPushButton("机器学习分割")
+        ml_seg_btn.clicked.connect(self.run_ml_segmentation)
+        ai_seg_layout.addWidget(ml_seg_btn)
         segmentation_layout.addWidget(ai_seg_group)
 
         manual_seg_group = QtWidgets.QGroupBox("手动分割")
@@ -1998,14 +2056,14 @@ class UIComponents:
         # 将右侧面板添加到主分割器
         main_splitter.addWidget(self.right_panel)
         
-        # 设置分割器的初始尺寸比例（左侧固定，中间自适应，右侧固定）
-        main_splitter.setStretchFactor(0, 0)  # 左侧工具栏 - 不拉伸
+        # 设置分割器的初始尺寸比例（左侧可扩展，中间自适应，右侧固定）
+        main_splitter.setStretchFactor(0, 1)  # 左侧工具栏 - 可拉伸
         main_splitter.setStretchFactor(1, 5)  # 中间视图区域 - 主要区域
         main_splitter.setStretchFactor(2, 0)  # 右侧面板 - 不拉伸
         
         # 设置初始分割比例
         total_width = 1600  # 假设的总宽度
-        main_splitter.setSizes([200, 1080, 320])  # 左侧:中间:右侧 的比例
+        main_splitter.setSizes([280, 1000, 320])  # 左侧:中间:右侧 的比例
         
         # 使用QMainWindow的setCentralWidget方法设置中心部件
         self.setCentralWidget(main_splitter)
@@ -2762,8 +2820,28 @@ class UIComponents:
         data_item : dict
             数据项，包含image, array, spacing等信息
         """
+        previous_item = self.data_list_widget.currentItem() if hasattr(self, 'data_list_widget') else None
+
         # 创建新列表项
-        list_item = QtWidgets.QListWidgetItem(data_name)
+        display_name = data_name
+        data_type = data_item.get('data_type', 'image') if isinstance(data_item, dict) else 'image'
+        if data_type == 'label' and isinstance(data_item, dict):
+            if 'label_color' not in data_item:
+                palette = [
+                    (255, 90, 90),
+                    (90, 220, 120),
+                    (80, 170, 255),
+                    (255, 210, 70),
+                    (220, 120, 255),
+                    (100, 230, 230),
+                ]
+                idx = getattr(self, '_label_color_index', 0)
+                data_item['label_color'] = palette[idx % len(palette)]
+                self._label_color_index = idx + 1
+        if data_type == 'label' and '[标签]' not in display_name:
+            display_name = f"{display_name} [标签]"
+
+        list_item = QtWidgets.QListWidgetItem(display_name)
         list_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
         
         # 将数据信息存储到item中
@@ -2772,13 +2850,20 @@ class UIComponents:
         
         # 添加到列表
         self.data_list_widget.addItem(list_item)
-        item_widget = self._build_dataset_list_item_widget(list_item, data_name)
+        item_widget = self._build_dataset_list_item_widget(list_item, display_name)
         list_item.setSizeHint(item_widget.sizeHint())
         self.data_list_widget.setItemWidget(list_item, item_widget)
-        self.data_list_widget.setCurrentItem(list_item)
-        self.switch_to_data(data_item, data_name)
+
+        if data_type == 'label':
+            if previous_item is not None:
+                self.data_list_widget.setCurrentItem(previous_item)
+            else:
+                self.data_list_widget.setCurrentItem(list_item)
+        else:
+            self.data_list_widget.setCurrentItem(list_item)
+            self.switch_to_data(data_item, display_name)
         
-        print(f"数据已添加到列表: {data_name} (已自动显示)")
+        print(f"数据已添加到列表: {display_name} (已自动显示)")
     
     def _build_dataset_list_item_widget(self, item, data_name):
         row_widget = QtWidgets.QWidget()
@@ -2793,6 +2878,13 @@ class UIComponents:
 
         name_label = QtWidgets.QLabel(data_name, row_widget)
         name_label.setAlignment(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft)
+
+        data_item = item.data(QtCore.Qt.UserRole)
+        if isinstance(data_item, dict) and data_item.get('data_type') == 'label':
+            label_color = data_item.get('label_color', (255, 128, 64))
+            name_label.setStyleSheet(
+                f"color: rgb({int(label_color[0])}, {int(label_color[1])}, {int(label_color[2])}); font-weight: bold;"
+            )
         row_layout.addWidget(name_label, 1)
 
         item.setData(QtCore.Qt.UserRole + 2, eye_btn)
@@ -2990,6 +3082,19 @@ class UIComponents:
             # 设置raw_array
             self.raw_array = self.array
 
+            if data_item.get('data_type') == 'label':
+                self.annotation_volume = self.array.astype(np.uint16).copy()
+                if 'annotation_drawn_mask' in data_item and data_item.get('annotation_drawn_mask') is not None:
+                    self.annotation_drawn_mask = data_item['annotation_drawn_mask'].copy()
+                else:
+                    self.annotation_drawn_mask = self.array > 0
+                if 'label_color' in data_item:
+                    self.annotation_overlay_color = tuple(data_item['label_color'])
+                if 'label_color_map' in data_item and isinstance(data_item['label_color_map'], dict):
+                    self.annotation_label_colors = {
+                        int(k): tuple(v) for k, v in data_item['label_color_map'].items()
+                    }
+
             # 更新属性面板
             if hasattr(self, 'prop_size_label'):
                 self.prop_size_label.setText(f"{self.depth_x} x {self.depth_y} x {self.depth_z}")
@@ -3010,6 +3115,11 @@ class UIComponents:
                 self.prop_format_label.setText("体数据")
             if hasattr(self, '_update_basic_properties_table'):
                 self._update_basic_properties_table()
+
+            if data_item.get('data_type') == 'label' and hasattr(self, 'status_label'):
+                info = data_item.get('label_info', '')
+                if info:
+                    self.status_label.setText(f"标签数据: {info}")
             
             # 重新创建视图
             data_max = float(self.array.max())
@@ -3428,10 +3538,393 @@ class UIComponents:
                 viewer.slider.setValue(min(viewer.max_index - 1, viewer.slider.value() + step))
 
     def start_brush_annotation(self):
-        self.statusBar().showMessage("画笔标注模式入口已启用", 2000)
+        if not self._prepare_annotation_environment():
+            return
+        self.annotation_enabled = True
+        self.annotation_mode = 'brush'
+        current_label = self.get_current_annotation_label()
+        self.annotation_overlay_color = self.get_annotation_label_color(current_label)
+        self.statusBar().showMessage(
+            f"画笔标注已启用（标签={current_label}，半径={self.get_current_annotation_radius()}）",
+            2500,
+        )
 
     def start_eraser_annotation(self):
-        self.statusBar().showMessage("橡皮擦标注模式入口已启用", 2000)
+        if not self._prepare_annotation_environment():
+            return
+        self.annotation_enabled = True
+        self.annotation_mode = 'eraser'
+        self.statusBar().showMessage("橡皮擦已启用（按住左键擦除）", 2500)
+
+    def _prepare_annotation_environment(self):
+        if not hasattr(self, 'array') or self.array is None:
+            QtWidgets.QMessageBox.warning(self, "数据不可用", "请先加载CT数据后再进行标注。")
+            return False
+
+        if len(self.array.shape) != 3:
+            QtWidgets.QMessageBox.warning(self, "数据不可用", "当前数据不是3D灰度体数据，暂不支持手工标注。")
+            return False
+
+        if not hasattr(self, 'annotation_volume') or self.annotation_volume is None or self.annotation_volume.shape != self.array.shape:
+            self.annotation_volume = np.zeros(self.array.shape, dtype=np.uint16)
+        if not hasattr(self, 'annotation_drawn_mask') or self.annotation_drawn_mask is None or self.annotation_drawn_mask.shape != self.array.shape:
+            self.annotation_drawn_mask = np.zeros(self.array.shape, dtype=bool)
+
+        if not hasattr(self, 'annotation_overlay_color'):
+            self.annotation_overlay_color = (255, 60, 60)
+        if not hasattr(self, 'annotation_overlay_alpha'):
+            self.annotation_overlay_alpha = 110
+        if not hasattr(self, 'annotation_mode'):
+            self.annotation_mode = 'brush'
+        if not hasattr(self, 'annotation_label_colors'):
+            self.annotation_label_colors = {}
+        if not hasattr(self, '_annotation_color_palette'):
+            self._annotation_color_palette = [
+                (255, 90, 90),
+                (80, 200, 120),
+                (90, 160, 255),
+                (255, 210, 70),
+                (220, 120, 255),
+                (100, 230, 230),
+                (255, 150, 70),
+                (180, 255, 120),
+            ]
+
+        return True
+
+    def get_annotation_label_color(self, label_value):
+        if not self._prepare_annotation_environment():
+            return (255, 60, 60)
+        label_value = int(label_value)
+        if label_value <= 0:
+            return (0, 0, 0)
+        if label_value not in self.annotation_label_colors:
+            palette = self._annotation_color_palette
+            self.annotation_label_colors[label_value] = palette[(label_value - 1) % len(palette)]
+        return tuple(self.annotation_label_colors[label_value])
+
+    def get_current_annotation_label(self):
+        if hasattr(self, 'annotation_label_spin'):
+            return int(self.annotation_label_spin.value())
+        return 0
+
+    def get_current_annotation_radius(self):
+        if hasattr(self, 'annotation_brush_radius_spin'):
+            return int(self.annotation_brush_radius_spin.value())
+        return 3
+
+    def _on_annotation_label_changed(self, value):
+        if not self._prepare_annotation_environment():
+            return
+        self.annotation_overlay_color = self.get_annotation_label_color(int(value))
+        if getattr(self, 'annotation_enabled', False) and getattr(self, 'annotation_mode', 'brush') == 'brush':
+            self.statusBar().showMessage(
+                f"当前画笔标签={int(value)}，颜色={self.annotation_overlay_color}",
+                1500,
+            )
+
+    def apply_annotation_stroke(self, view_type, z, y, x, is_erase=False):
+        if not self._prepare_annotation_environment():
+            return
+
+        z = int(z)
+        y = int(y)
+        x = int(x)
+        if not (0 <= z < self.annotation_volume.shape[0] and 0 <= y < self.annotation_volume.shape[1] and 0 <= x < self.annotation_volume.shape[2]):
+            return
+
+        radius = self.get_current_annotation_radius()
+        label_value = self.get_current_annotation_label()
+        if not is_erase:
+            self.annotation_overlay_color = self.get_annotation_label_color(label_value)
+
+        if view_type == 'axial':
+            y_min = max(0, y - radius)
+            y_max = min(self.annotation_volume.shape[1] - 1, y + radius)
+            x_min = max(0, x - radius)
+            x_max = min(self.annotation_volume.shape[2] - 1, x + radius)
+            yy, xx = np.ogrid[y_min:y_max + 1, x_min:x_max + 1]
+            mask = (yy - y) ** 2 + (xx - x) ** 2 <= radius ** 2
+            region = self.annotation_volume[z, y_min:y_max + 1, x_min:x_max + 1]
+            if is_erase:
+                region[mask] = 0
+                drawn_region = self.annotation_drawn_mask[z, y_min:y_max + 1, x_min:x_max + 1]
+                drawn_region[mask] = False
+                self.annotation_drawn_mask[z, y_min:y_max + 1, x_min:x_max + 1] = drawn_region
+            else:
+                region[mask] = label_value
+                drawn_region = self.annotation_drawn_mask[z, y_min:y_max + 1, x_min:x_max + 1]
+                drawn_region[mask] = True
+                self.annotation_drawn_mask[z, y_min:y_max + 1, x_min:x_max + 1] = drawn_region
+            self.annotation_volume[z, y_min:y_max + 1, x_min:x_max + 1] = region
+        elif view_type == 'sagittal':
+            z_min = max(0, z - radius)
+            z_max = min(self.annotation_volume.shape[0] - 1, z + radius)
+            y_min = max(0, y - radius)
+            y_max = min(self.annotation_volume.shape[1] - 1, y + radius)
+            zz, yy = np.ogrid[z_min:z_max + 1, y_min:y_max + 1]
+            mask = (zz - z) ** 2 + (yy - y) ** 2 <= radius ** 2
+            region = self.annotation_volume[z_min:z_max + 1, y_min:y_max + 1, x]
+            if is_erase:
+                region[mask] = 0
+                drawn_region = self.annotation_drawn_mask[z_min:z_max + 1, y_min:y_max + 1, x]
+                drawn_region[mask] = False
+                self.annotation_drawn_mask[z_min:z_max + 1, y_min:y_max + 1, x] = drawn_region
+            else:
+                region[mask] = label_value
+                drawn_region = self.annotation_drawn_mask[z_min:z_max + 1, y_min:y_max + 1, x]
+                drawn_region[mask] = True
+                self.annotation_drawn_mask[z_min:z_max + 1, y_min:y_max + 1, x] = drawn_region
+            self.annotation_volume[z_min:z_max + 1, y_min:y_max + 1, x] = region
+        elif view_type == 'coronal':
+            z_min = max(0, z - radius)
+            z_max = min(self.annotation_volume.shape[0] - 1, z + radius)
+            x_min = max(0, x - radius)
+            x_max = min(self.annotation_volume.shape[2] - 1, x + radius)
+            zz, xx = np.ogrid[z_min:z_max + 1, x_min:x_max + 1]
+            mask = (zz - z) ** 2 + (xx - x) ** 2 <= radius ** 2
+            region = self.annotation_volume[z_min:z_max + 1, y, x_min:x_max + 1]
+            if is_erase:
+                region[mask] = 0
+                drawn_region = self.annotation_drawn_mask[z_min:z_max + 1, y, x_min:x_max + 1]
+                drawn_region[mask] = False
+                self.annotation_drawn_mask[z_min:z_max + 1, y, x_min:x_max + 1] = drawn_region
+            else:
+                region[mask] = label_value
+                drawn_region = self.annotation_drawn_mask[z_min:z_max + 1, y, x_min:x_max + 1]
+                drawn_region[mask] = True
+                self.annotation_drawn_mask[z_min:z_max + 1, y, x_min:x_max + 1] = drawn_region
+            self.annotation_volume[z_min:z_max + 1, y, x_min:x_max + 1] = region
+        else:
+            return
+
+        self.refresh_annotation_overlays()
+
+    def refresh_annotation_overlays(self):
+        for viewer_name in ["axial_viewer", "cor_viewer", "sag_viewer"]:
+            viewer = getattr(self, viewer_name, None)
+            if viewer and hasattr(viewer, '_update_annotation_overlay'):
+                viewer._update_annotation_overlay(viewer.slider.value())
+
+    def clear_annotation_volume(self):
+        if not hasattr(self, 'annotation_volume') or self.annotation_volume is None:
+            self.annotation_volume = None
+            self.statusBar().showMessage("当前无标注可清空", 1500)
+            return
+
+        reply = QtWidgets.QMessageBox.question(
+            self,
+            "清空标注",
+            "确认清空当前所有手工标注吗？",
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+
+        self.annotation_volume.fill(0)
+        if hasattr(self, 'annotation_drawn_mask') and self.annotation_drawn_mask is not None:
+            self.annotation_drawn_mask.fill(False)
+        self._remove_annotation_label_datasets()
+        self.refresh_annotation_overlays()
+        self.statusBar().showMessage("手工标注已清空", 2000)
+
+    def _remove_annotation_label_datasets(self):
+        """移除数据列表中由手工标注生成的标签数据项。"""
+        if not hasattr(self, 'data_list_widget'):
+            return
+
+        rows_to_remove = []
+        for idx in range(self.data_list_widget.count()):
+            item = self.data_list_widget.item(idx)
+            if item is None:
+                continue
+            data_item = item.data(QtCore.Qt.UserRole)
+            if not isinstance(data_item, dict):
+                continue
+            if data_item.get('data_type') != 'label':
+                continue
+            if data_item.get('label_source') == 'annotation':
+                rows_to_remove.append(idx)
+
+        if not rows_to_remove:
+            return
+
+        for row in reversed(rows_to_remove):
+            self.data_list_widget.takeItem(row)
+
+        if self.data_list_widget.count() > 0:
+            first_item = self.data_list_widget.item(0)
+            self.data_list_widget.setCurrentItem(first_item)
+            data_item = first_item.data(QtCore.Qt.UserRole)
+            if data_item is not None:
+                self.switch_to_data(data_item, first_item.text())
+        else:
+            self.clear_viewers()
+            self.create_placeholder_views()
+
+    def save_annotation_as_label_file(self):
+        return self.create_label_file_from_annotation(suggested_output_path="annotation_labels.nii.gz", ask_save=True)
+
+    def create_label_file_from_annotation(self, suggested_output_path=None, ask_save=True):
+        if not self._prepare_annotation_environment():
+            return None
+
+        has_annotation = bool(np.any(self.annotation_drawn_mask)) if hasattr(self, 'annotation_drawn_mask') else bool(np.count_nonzero(self.annotation_volume) > 0)
+        if not has_annotation:
+            QtWidgets.QMessageBox.information(
+                self,
+                "标注为空",
+                "当前还没有手工标注。\n请先点击“标注区-画笔/橡皮擦”进行标注，然后再创建标签文件。",
+            )
+            return None
+
+        save_to_file = True
+        filepath = None
+        if ask_save:
+            reply = QtWidgets.QMessageBox.question(
+                self,
+                "保存标签文件",
+                "是否将当前标注保存为标签文件？\n"
+                "- 是：选择路径保存\n"
+                "- 否：仅加入数据列表（自动生成临时标签文件供算法使用）",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Cancel,
+            )
+            if reply == QtWidgets.QMessageBox.Cancel:
+                return None
+            save_to_file = (reply == QtWidgets.QMessageBox.Yes)
+
+        if save_to_file:
+            default_name = suggested_output_path if suggested_output_path else "annotation_labels.nii.gz"
+            filepath, _ = QtWidgets.QFileDialog.getSaveFileName(
+                self,
+                "保存标签文件",
+                default_name,
+                "NIfTI文件 (*.nii.gz *.nii);;所有文件 (*)",
+            )
+            if not filepath:
+                return None
+            if not (filepath.endswith('.nii.gz') or filepath.endswith('.nii')):
+                filepath += '.nii.gz'
+        else:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filepath = os.path.join(tempfile.gettempdir(), f"annotation_labels_temp_{timestamp}.nii.gz")
+
+        try:
+            label_image = sitk.GetImageFromArray(self.annotation_volume.astype(np.uint16))
+            if hasattr(self, 'image') and self.image is not None:
+                label_image.CopyInformation(self.image)
+            sitk.WriteImage(label_image, filepath)
+
+            label_info, unique_vals = self._summarize_label_array(self.annotation_volume, self.annotation_drawn_mask if hasattr(self, 'annotation_drawn_mask') else None)
+            dataset_name = self._build_annotation_dataset_name(unique_vals, fallback=os.path.basename(filepath) if save_to_file else "手工标签")
+            data_item = {
+                'image': label_image,
+                'array': self.annotation_volume.astype(np.uint16).copy(),
+                'shape': self.annotation_volume.shape,
+                'spacing': self.spacing if hasattr(self, 'spacing') else (1.0, 1.0, 1.0),
+                'rgb_array': None,
+                'is_segmentation': True,
+                'data_type': 'label',
+                'label_source': 'annotation',
+                'annotation_view_type': getattr(self, 'active_view', 'axial'),
+                'label_info': label_info,
+                'label_values': unique_vals,
+                'label_color_map': {int(v): self.get_annotation_label_color(int(v)) for v in unique_vals},
+                'label_path': filepath if save_to_file else None,
+                'annotation_drawn_mask': self.annotation_drawn_mask.copy() if hasattr(self, 'annotation_drawn_mask') else None,
+            }
+            if hasattr(self, 'add_data_to_list'):
+                self.add_data_to_list(dataset_name, data_item)
+
+            msg = f"标签值统计：\n{label_info}"
+            if save_to_file:
+                msg = f"标签文件已保存：\n{filepath}\n\n{msg}"
+            else:
+                msg = "标签未落盘（仅加入数据列表，可后续导出）。\n\n" + msg
+
+            QtWidgets.QMessageBox.information(self, "标签创建完成", msg)
+            return filepath
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "创建失败", f"创建标签文件失败：{str(e)}")
+            return None
+
+    def _build_annotation_dataset_name(self, unique_vals, fallback="手工标签"):
+        name = ""
+        if hasattr(self, 'annotation_name_edit'):
+            name = self.annotation_name_edit.text().strip()
+        if not name:
+            if unique_vals:
+                vals = "-".join(str(v) for v in unique_vals)
+                return f"{fallback}(标签{vals})"
+            return fallback
+        if unique_vals:
+            vals = "-".join(str(v) for v in unique_vals)
+            return f"{name}(标签{vals})"
+        return name
+
+    def get_available_label_datasets(self):
+        """返回数据列表中可用于机器学习分割的标签数据集信息。"""
+        datasets = []
+        if not hasattr(self, 'data_list_widget'):
+            return datasets
+
+        for index in range(self.data_list_widget.count()):
+            item = self.data_list_widget.item(index)
+            if item is None:
+                continue
+            data_item = item.data(QtCore.Qt.UserRole)
+            if not isinstance(data_item, dict):
+                continue
+            if data_item.get('data_type') != 'label':
+                continue
+
+            label_path = data_item.get('label_path', None)
+            if not label_path or not os.path.exists(label_path):
+                try:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                    tmp_path = os.path.join(tempfile.gettempdir(), f"label_dataset_{timestamp}.nii.gz")
+                    export_image = sitk.GetImageFromArray(data_item['array'])
+                    src_img = data_item.get('image', None)
+                    if src_img is not None:
+                        export_image.CopyInformation(src_img)
+                    elif hasattr(self, 'image') and self.image is not None:
+                        export_image.CopyInformation(self.image)
+                    sitk.WriteImage(export_image, tmp_path)
+                    label_path = tmp_path
+                    data_item['label_path'] = tmp_path
+                except Exception:
+                    label_path = None
+
+            if not label_path:
+                continue
+
+            datasets.append({
+                'name': item.text(),
+                'path': label_path,
+                'label_info': data_item.get('label_info', ''),
+                'label_values': data_item.get('label_values', []),
+                'annotation_drawn_mask': data_item.get('annotation_drawn_mask', None),
+                'annotation_view_type': data_item.get('annotation_view_type', None),
+            })
+
+        return datasets
+
+    def _summarize_label_array(self, label_array, drawn_mask=None):
+        if drawn_mask is not None:
+            selected = label_array[drawn_mask]
+        else:
+            selected = label_array[label_array > 0]
+
+        if selected.size == 0:
+            return "无前景标签", []
+
+        values, counts = np.unique(selected, return_counts=True)
+        lines = []
+        kept_values = []
+        for value, count in zip(values, counts):
+            kept_values.append(int(value))
+            lines.append(f"标签 {int(value)}: {int(count)} 体素")
+        return "；".join(lines), kept_values
 
     def measure_area_placeholder(self):
         QtWidgets.QMessageBox.information(self, "面积测量", "面积测量入口已预留。")
@@ -3620,7 +4113,42 @@ class UIComponents:
         QtWidgets.QMessageBox.information(self, "复制图层", "复制当前图层入口已启用。")
 
     def export_current_layer(self):
-        QtWidgets.QMessageBox.information(self, "导出图层", "导出当前图层入口已启用。")
+        if not hasattr(self, 'data_list_widget'):
+            return
+        current_item = self.data_list_widget.currentItem()
+        if current_item is None:
+            QtWidgets.QMessageBox.information(self, "提示", "请先在数据列表选择要导出的图层。")
+            return
+
+        data_item = current_item.data(QtCore.Qt.UserRole)
+        if data_item is None or 'array' not in data_item:
+            QtWidgets.QMessageBox.warning(self, "导出失败", "当前图层数据不可用。")
+            return
+
+        default_name = current_item.text().replace('[标签]', '').strip().replace(' ', '_') + ".nii.gz"
+        filepath, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "导出当前图层",
+            default_name,
+            "NIfTI文件 (*.nii.gz *.nii);;所有文件 (*)",
+        )
+        if not filepath:
+            return
+        if not (filepath.endswith('.nii.gz') or filepath.endswith('.nii')):
+            filepath += '.nii.gz'
+
+        try:
+            arr = data_item['array']
+            export_image = sitk.GetImageFromArray(arr)
+            src_img = data_item.get('image', None)
+            if src_img is not None:
+                export_image.CopyInformation(src_img)
+            elif hasattr(self, 'image') and self.image is not None:
+                export_image.CopyInformation(self.image)
+            sitk.WriteImage(export_image, filepath)
+            self.statusBar().showMessage(f"图层已导出: {filepath}", 3000)
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "导出失败", f"导出当前图层失败：{str(e)}")
 
     def apply_3d_preset(self, preset_name):
         presets = {

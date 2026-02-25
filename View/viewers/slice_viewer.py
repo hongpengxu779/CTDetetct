@@ -89,6 +89,8 @@ class SliceViewer(QtWidgets.QWidget):
         self.display_opacity = 1.0
         self.interpolation_enabled = True
         self.interpolation_mode_text = "线性"
+        self.annotation_overlay_item = None
+        self.annotation_drawing = False
         
         # 确定视图类型
         if "Axial" in title or "轴位" in title:
@@ -136,6 +138,10 @@ class SliceViewer(QtWidgets.QWidget):
         # 图像项
         self.pixmap_item = QtWidgets.QGraphicsPixmapItem()
         self.scene.addItem(self.pixmap_item)
+
+        self.annotation_overlay_item = QtWidgets.QGraphicsPixmapItem()
+        self.annotation_overlay_item.setZValue(1)
+        self.scene.addItem(self.annotation_overlay_item)
         
         # 创建放大按钮作为视图的叠加层
         self.zoom_btn = QtWidgets.QPushButton("🔍", self.view)
@@ -415,6 +421,9 @@ class SliceViewer(QtWidgets.QWidget):
 
         # 重绘十字线
         self._redraw_crosshair()
+
+        # 绘制标注覆盖层
+        self._update_annotation_overlay(idx)
         
         # 如果缩放窗口打开着，更新它的图像
         if hasattr(self, 'zoom_window') and self.zoom_window and self.zoom_window.isVisible():
@@ -519,6 +528,23 @@ class SliceViewer(QtWidgets.QWidget):
                 new_value = max(0, min(self.max_index - 1, self.slider.value() + step))
                 self.slider.setValue(new_value)
                 return True
+
+            if self.measurement_mode is None and self.roi_mode is None and self.parent_viewer is not None:
+                if getattr(self.parent_viewer, 'annotation_enabled', False):
+                    if event.type() == QtCore.QEvent.MouseButtonPress and event.button() == QtCore.Qt.LeftButton:
+                        self.annotation_drawing = True
+                        self.view.viewport().setCursor(QtCore.Qt.CrossCursor)
+                        return self._handle_annotation_event(event)
+
+                    if event.type() == QtCore.QEvent.MouseButtonPress and event.button() == QtCore.Qt.RightButton:
+                        return self._show_annotation_context_menu(event)
+
+                    if event.type() == QtCore.QEvent.MouseMove and self.annotation_drawing and (event.buttons() & QtCore.Qt.LeftButton):
+                        return self._handle_annotation_event(event)
+
+                    if event.type() == QtCore.QEvent.MouseButtonRelease and event.button() == QtCore.Qt.LeftButton:
+                        self.annotation_drawing = False
+                        return self._handle_annotation_event(event)
 
             # 窗口级别交互（优先级高于默认平移/缩放）
             if self.measurement_mode is None and self.roi_mode is None and self.parent_viewer is not None:
@@ -767,6 +793,151 @@ class SliceViewer(QtWidgets.QWidget):
                 self._clear_pixel_info()
         
         return super().eventFilter(obj, event)
+
+    def _handle_annotation_event(self, event):
+        """处理手工标注事件"""
+        scene_pos = self.view.mapToScene(event.pos())
+        voxel = self._scene_to_voxel(scene_pos)
+        if voxel is None:
+            return True
+
+        z, y, x = voxel
+        if hasattr(self.parent_viewer, 'apply_annotation_stroke'):
+            self.parent_viewer.apply_annotation_stroke(
+                view_type=self.view_type,
+                z=z,
+                y=y,
+                x=x,
+                is_erase=getattr(self.parent_viewer, 'annotation_mode', 'brush') == 'eraser',
+            )
+        return True
+
+    def _show_annotation_context_menu(self, event):
+        """标注模式下的右键菜单"""
+        if self.parent_viewer is None:
+            return True
+
+        menu = QtWidgets.QMenu(self)
+
+        create_label_action = menu.addAction("创建标签文件...")
+        create_label_action.triggered.connect(
+            lambda: self.parent_viewer.create_label_file_from_annotation(ask_save=True)
+        )
+
+        menu.addSeparator()
+
+        brush_action = menu.addAction("切换到画笔")
+        brush_action.triggered.connect(lambda: self.parent_viewer.start_brush_annotation())
+
+        eraser_action = menu.addAction("切换到橡皮擦")
+        eraser_action.triggered.connect(lambda: self.parent_viewer.start_eraser_annotation())
+
+        menu.addSeparator()
+
+        stop_action = menu.addAction("结束标注模式")
+        stop_action.triggered.connect(lambda: self._stop_annotation_mode())
+
+        menu.exec_(event.globalPos())
+        return True
+
+    def _stop_annotation_mode(self):
+        if self.parent_viewer is None:
+            return
+        if hasattr(self.parent_viewer, 'annotation_enabled'):
+            self.parent_viewer.annotation_enabled = False
+        self.annotation_drawing = False
+        self.view.viewport().setCursor(QtCore.Qt.ArrowCursor)
+        if hasattr(self.parent_viewer, 'statusBar'):
+            self.parent_viewer.statusBar().showMessage("标注模式已结束", 2000)
+
+    def _scene_to_voxel(self, scene_pos):
+        """将当前视图scene坐标转换为体素(z,y,x)"""
+        pixmap = self.pixmap_item.pixmap()
+        if pixmap is None or pixmap.isNull():
+            return None
+
+        px = int(scene_pos.x())
+        py = int(scene_pos.y())
+        if px < 0 or py < 0 or px >= pixmap.width() or py >= pixmap.height():
+            return None
+
+        slice_idx = self.slider.value()
+        if self.view_type == "axial":
+            return slice_idx, py, px
+        if self.view_type == "sagittal":
+            return py, px, slice_idx
+        if self.view_type == "coronal":
+            return py, slice_idx, px
+        return None
+
+    def _extract_annotation_slice(self, label_volume, idx):
+        if self.view_type == 'axial':
+            return label_volume[idx, :, :]
+        if self.view_type == 'sagittal':
+            return label_volume[:, :, idx]
+        if self.view_type == 'coronal':
+            return label_volume[:, idx, :]
+        return None
+
+    def _extract_mask_slice(self, mask_volume, idx):
+        if self.view_type == 'axial':
+            return mask_volume[idx, :, :]
+        if self.view_type == 'sagittal':
+            return mask_volume[:, :, idx]
+        if self.view_type == 'coronal':
+            return mask_volume[:, idx, :]
+        return None
+
+    def _update_annotation_overlay(self, idx):
+        """更新标注覆盖层"""
+        if self.annotation_overlay_item is None:
+            return
+        self.annotation_overlay_item.setPixmap(QtGui.QPixmap())
+
+        if self.parent_viewer is None:
+            return
+        label_volume = getattr(self.parent_viewer, 'annotation_volume', None)
+        if label_volume is None:
+            return
+        drawn_mask_volume = getattr(self.parent_viewer, 'annotation_drawn_mask', None)
+
+        try:
+            label_slice = self._extract_annotation_slice(label_volume, idx)
+            if label_slice is None:
+                return
+            if drawn_mask_volume is not None:
+                drawn_slice = self._extract_mask_slice(drawn_mask_volume, idx)
+            else:
+                drawn_slice = (label_slice > 0)
+
+            if drawn_slice is None or not np.any(drawn_slice):
+                return
+
+            unique_vals = np.unique(label_slice[drawn_slice])
+            if unique_vals.size == 0:
+                return
+
+            rgba = np.zeros((label_slice.shape[0], label_slice.shape[1], 4), dtype=np.uint8)
+            alpha = int(getattr(self.parent_viewer, 'annotation_overlay_alpha', 110))
+
+            for label_value in unique_vals:
+                if hasattr(self.parent_viewer, 'get_annotation_label_color'):
+                    color = np.array(self.parent_viewer.get_annotation_label_color(int(label_value)), dtype=np.uint8)
+                else:
+                    color = np.array(getattr(self.parent_viewer, 'annotation_overlay_color', (255, 60, 60)), dtype=np.uint8)
+
+                mask = (label_slice == label_value) & drawn_slice
+                rgba[..., 0][mask] = color[0]
+                rgba[..., 1][mask] = color[1]
+                rgba[..., 2][mask] = color[2]
+                rgba[..., 3][mask] = alpha
+
+            h, w = rgba.shape[:2]
+            qimage = QtGui.QImage(rgba.data, w, h, 4 * w, QtGui.QImage.Format_RGBA8888).copy()
+            self.annotation_overlay_item.setPixmap(QtGui.QPixmap.fromImage(qimage))
+            self.annotation_overlay_item.setOpacity(1.0)
+        except Exception as e:
+            print(f"更新标注覆盖层失败: {str(e)}")
 
     # ------------------------------------------------------------------ 坐标/灰度实时显示
     def _update_pixel_info(self, viewport_pos):
