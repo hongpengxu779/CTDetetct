@@ -97,6 +97,17 @@ class ROIOperations:
         
         if hasattr(self, 'statusBar'):
             self.statusBar().showMessage("ROI已清除")
+
+        if hasattr(self, '_ensure_sam_prompt_state'):
+            self._ensure_sam_prompt_state()
+            box_state = self.sam_prompt_state.get('box') if isinstance(self.sam_prompt_state, dict) else None
+            if box_state is not None:
+                self.sam_prompt_state['box'] = None
+
+        for viewer_name in ["axial_viewer", "cor_viewer", "sag_viewer"]:
+            viewer = getattr(self, viewer_name, None)
+            if viewer is not None and hasattr(viewer, 'clear_sam_prompt_marks'):
+                viewer.clear_sam_prompt_marks('box')
         
         self._fire_roi_changed()
     
@@ -132,6 +143,12 @@ class ROIOperations:
         """向指定视图添加ROI"""
         if view_type not in self.roi_rects:
             return
+
+        if hasattr(self, 'on_sam_box_prompt_from_roi'):
+            try:
+                self.on_sam_box_prompt_from_roi(view_type, roi_rect, slice_index)
+            except Exception as exc:
+                print(f"SAM框提示联动失败: {exc}")
         
         roi_data = {
             'rect': roi_rect,  # (x1, y1, x2, y2)

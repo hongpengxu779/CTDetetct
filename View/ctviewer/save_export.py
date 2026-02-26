@@ -448,6 +448,31 @@ class DataExporter:
             import traceback
             traceback.print_exc()
             return False, f"RAW/MHD 导出失败: {str(e)}"
+
+    @staticmethod
+    def export_raw_only(
+        array: np.ndarray,
+        filepath: str,
+        compress: bool = False
+    ) -> Tuple[bool, str]:
+        """仅导出 RAW 数据文件（不生成 MHD 头文件）"""
+        try:
+            if compress:
+                if not filepath.lower().endswith('.zraw'):
+                    filepath = filepath + '.zraw'
+                with gzip.open(filepath, 'wb') as f:
+                    f.write(array.tobytes())
+            else:
+                if not filepath.lower().endswith('.raw'):
+                    filepath = filepath + '.raw'
+                array.tofile(filepath)
+
+            raw_size = os.path.getsize(filepath) / (1024 * 1024)
+            return True, f"已导出 RAW 文件: {os.path.basename(filepath)} ({raw_size:.1f} MB)"
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return False, f"RAW 导出失败: {str(e)}"
     
     @staticmethod
     def export_slices_as_images(
@@ -665,6 +690,10 @@ class ExportDialogs:
         # 压缩选项
         compress_check = QtWidgets.QCheckBox("压缩 RAW 数据 (gzip)")
         layout.addWidget(compress_check)
+
+        # 导出模式
+        raw_only_check = QtWidgets.QCheckBox("仅导出 RAW（不生成 MHD 头文件）")
+        layout.addWidget(raw_only_check)
         
         # 按钮
         btn_layout = QtWidgets.QHBoxLayout()
@@ -678,22 +707,31 @@ class ExportDialogs:
         layout.addLayout(btn_layout)
         
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
+            default_name = "exported.raw" if raw_only_check.isChecked() else "exported.mhd"
+            file_filter = "RAW文件 (*.raw);;MetaImage (*.mhd);;所有文件 (*)"
             filepath, _ = QtWidgets.QFileDialog.getSaveFileName(
                 parent,
-                "保存 MHD 文件",
-                "exported.mhd",
-                "MetaImage (*.mhd)"
+                "保存文件",
+                default_name,
+                file_filter
             )
             
             if not filepath:
                 return None
             
-            success, msg = DataExporter.export_raw_mhd(
-                array=array,
-                filepath=filepath,
-                spacing=spacing,
-                compress=compress_check.isChecked()
-            )
+            if raw_only_check.isChecked() or filepath.lower().endswith('.raw') or filepath.lower().endswith('.zraw'):
+                success, msg = DataExporter.export_raw_only(
+                    array=array,
+                    filepath=filepath,
+                    compress=compress_check.isChecked()
+                )
+            else:
+                success, msg = DataExporter.export_raw_mhd(
+                    array=array,
+                    filepath=filepath,
+                    spacing=spacing,
+                    compress=compress_check.isChecked()
+                )
             
             if success:
                 QtWidgets.QMessageBox.information(parent, "导出完成", msg)

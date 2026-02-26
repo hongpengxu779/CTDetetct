@@ -17,6 +17,38 @@ from ..viewers import SliceViewer, VolumeViewer
 
 class DataLoader:
     """数据加载和管理类，作为Mixin使用"""
+
+    def _add_reconstructed_item_to_data_list(self, title, image, array):
+        """将重建数据添加到数据列表，确保后续保存/导出可用。"""
+        if not hasattr(self, 'data_list_widget') or self.data_list_widget is None:
+            return
+        if not hasattr(self, 'add_data_to_list'):
+            return
+
+        base_name = (title or "重建数据").strip() or "重建数据"
+        existing = set()
+        for i in range(self.data_list_widget.count()):
+            item = self.data_list_widget.item(i)
+            if item is not None:
+                existing.add(item.text())
+
+        name = base_name
+        if name in existing:
+            idx = 2
+            while f"{base_name} ({idx})" in existing:
+                idx += 1
+            name = f"{base_name} ({idx})"
+
+        spacing = tuple(image.GetSpacing()) if image is not None else tuple(getattr(self, 'spacing', (1.0, 1.0, 1.0)))
+        data_item = {
+            'image': image,
+            'array': array,
+            'shape': array.shape,
+            'spacing': spacing,
+            'data_type': 'image',
+            'source': 'slice_reconstruction',
+        }
+        self.add_data_to_list(name, data_item)
     
     def import_file(self):
         """导入文件对话框"""
@@ -509,6 +541,7 @@ class DataLoader:
             
             # 保存处理后的数组
             self.array = processed_array
+            self.raw_array = self.array
             
             # 获取尺寸信息
             self.depth_z, self.depth_y, self.depth_x = self.array.shape
@@ -575,6 +608,9 @@ class DataLoader:
             # 更新灰度直方图
             if hasattr(self, 'update_histogram'):
                 self.update_histogram(self.array)
+
+            # 加入数据列表（用于保存/导出/切换）
+            self._add_reconstructed_item_to_data_list(title, self.image, self.array)
             
             # 显示成功消息
             QtWidgets.QMessageBox.information(self, "成功", f"已加载{title}")
@@ -762,6 +798,9 @@ class DataLoader:
             # 更新灰度直方图
             if hasattr(self, 'update_histogram'):
                 self.update_histogram(self.raw_array)
+
+            # 加入数据列表（用于保存/导出/切换）
+            self._add_reconstructed_item_to_data_list(title, self.image, self.raw_array)
             
             print(f"成功加载 {title}")
             print(f"窗宽窗位控制已启用: WW={self.window_width}, WL={self.window_level}")

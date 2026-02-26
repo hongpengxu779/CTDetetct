@@ -91,6 +91,8 @@ class SliceViewer(QtWidgets.QWidget):
         self.interpolation_mode_text = "线性"
         self.annotation_overlay_item = None
         self.annotation_drawing = False
+        self.sam_point_marks = []
+        self.sam_box_marks = []
         
         # 确定视图类型
         if "Axial" in title or "轴位" in title:
@@ -405,6 +407,7 @@ class SliceViewer(QtWidgets.QWidget):
         
         # 更新种子点标记的可见性（只显示当前切片的种子点）
         self._update_seed_marks_visibility(idx)
+        self._update_sam_prompt_marks_visibility(idx)
         
         # 如果在测量模式下，通知父控制器更新其他视图中的对应线段
         if self.measurement_mode and hasattr(self, 'parent_controller') and self.parent_controller:
@@ -530,6 +533,12 @@ class SliceViewer(QtWidgets.QWidget):
                 return True
 
             if self.measurement_mode is None and self.roi_mode is None and self.parent_viewer is not None:
+                if getattr(self.parent_viewer, 'sam_prompt_mode', None) == 'point':
+                    if (event.type() == QtCore.QEvent.MouseButtonPress
+                            and event.button() == QtCore.Qt.LeftButton
+                            and (event.modifiers() & QtCore.Qt.ControlModifier)):
+                        return self._handle_sam_point_prompt_event(event)
+
                 if getattr(self.parent_viewer, 'annotation_enabled', False):
                     if event.type() == QtCore.QEvent.MouseButtonPress and event.button() == QtCore.Qt.LeftButton:
                         self.annotation_drawing = True
@@ -810,6 +819,26 @@ class SliceViewer(QtWidgets.QWidget):
                 x=x,
                 is_erase=getattr(self.parent_viewer, 'annotation_mode', 'brush') == 'eraser',
             )
+        return True
+
+    def _handle_sam_point_prompt_event(self, event):
+        """处理SAM点提示交互事件"""
+        scene_pos = self.view.mapToScene(event.pos())
+        voxel = self._scene_to_voxel(scene_pos)
+        if voxel is None:
+            return True
+
+        z, y, x = voxel
+        self.mark_sam_point_prompt(int(scene_pos.x()), int(scene_pos.y()), self.slider.value())
+        if hasattr(self.parent_viewer, 'set_sam_point_prompt'):
+            self.parent_viewer.set_sam_point_prompt(
+                view_type=self.view_type,
+                z=z,
+                y=y,
+                x=x,
+                point_label=1,
+            )
+        self.view.viewport().setCursor(QtCore.Qt.CrossCursor)
         return True
 
     def _show_annotation_context_menu(self, event):
@@ -1191,6 +1220,105 @@ class SliceViewer(QtWidgets.QWidget):
                 self.parent_viewer.status_label.setText("✓ 所有种子点已清除")
             
             print("所有种子点已清除")
+
+    def mark_sam_point_prompt(self, x, y, slice_index=None):
+        """在当前视图标记SAM点提示。"""
+        if slice_index is None:
+            slice_index = self.slider.value()
+
+        for marks in self.sam_point_marks:
+            if len(marks) != 4:
+                continue
+            h_line, v_line, circle, _ = marks
+            for item in (h_line, v_line, circle):
+                try:
+                    self.scene.removeItem(item)
+                except Exception:
+                    pass
+        self.sam_point_marks = []
+
+        pen = QtGui.QPen(QtGui.QColor(255, 0, 255))
+        pen.setWidth(2)
+        h_line = self.scene.addLine(x - 8, y, x + 8, y, pen)
+        v_line = self.scene.addLine(x, y - 8, x, y + 8, pen)
+        circle = self.scene.addEllipse(x - 5, y - 5, 10, 10, pen)
+        self.sam_point_marks.append((h_line, v_line, circle, int(slice_index)))
+        self._update_sam_prompt_marks_visibility(self.slider.value())
+
+    def mark_sam_box_prompt(self, rect, slice_index=None):
+        """在当前视图标记SAM框提示。"""
+        if rect is None:
+            return
+        if slice_index is None:
+            slice_index = self.slider.value()
+
+        for marks in self.sam_box_marks:
+            if len(marks) != 3:
+                continue
+            rect_item, text_item, _ = marks
+            for item in (rect_item, text_item):
+                try:
+                    self.scene.removeItem(item)
+                except Exception:
+                    pass
+        self.sam_box_marks = []
+
+        pen = QtGui.QPen(QtGui.QColor(255, 0, 255))
+        pen.setWidth(2)
+        rect_item = self.scene.addRect(rect, pen)
+        text_item = QtWidgets.QGraphicsTextItem("SAM-BOX")
+        text_item.setPos(rect.x(), rect.y() - 18)
+        text_item.setDefaultTextColor(QtGui.QColor(255, 0, 255))
+        self.scene.addItem(text_item)
+        self.sam_box_marks.append((rect_item, text_item, int(slice_index)))
+        self._update_sam_prompt_marks_visibility(self.slider.value())
+
+    def _update_sam_prompt_marks_visibility(self, current_slice_idx):
+        for marks in self.sam_point_marks:
+            if len(marks) != 4:
+                continue
+            h_line, v_line, circle, marker_slice = marks
+            visible = int(marker_slice) == int(current_slice_idx)
+            h_line.setVisible(visible)
+            v_line.setVisible(visible)
+            circle.setVisible(visible)
+
+        for marks in self.sam_box_marks:
+            if len(marks) != 3:
+                continue
+            rect_item, text_item, marker_slice = marks
+            visible = int(marker_slice) == int(current_slice_idx)
+            rect_item.setVisible(visible)
+            text_item.setVisible(visible)
+
+    def clear_sam_prompt_marks(self, prompt_type='all'):
+        """清除SAM提示标记。prompt_type: all/point/box"""
+        clear_point = prompt_type in ('all', 'point')
+        clear_box = prompt_type in ('all', 'box')
+
+        if clear_point:
+            for marks in self.sam_point_marks:
+                if len(marks) != 4:
+                    continue
+                h_line, v_line, circle, _ = marks
+                for item in (h_line, v_line, circle):
+                    try:
+                        self.scene.removeItem(item)
+                    except Exception:
+                        pass
+            self.sam_point_marks = []
+
+        if clear_box:
+            for marks in self.sam_box_marks:
+                if len(marks) != 3:
+                    continue
+                rect_item, text_item, _ = marks
+                for item in (rect_item, text_item):
+                    try:
+                        self.scene.removeItem(item)
+                    except Exception:
+                        pass
+            self.sam_box_marks = []
     
     def _clear_seed_marks_in_all_views(self):
         """清除所有视图中的种子点标记"""

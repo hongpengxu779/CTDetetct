@@ -389,10 +389,10 @@ class UIComponents:
         segment_action.triggered.connect(self.run_unet_segmentation)
         primary_toolbar.addAction(segment_action)
 
-        sam2_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowForward), "SAM2预分割", self)
-        sam2_action.setToolTip("SAM2预分割")
-        sam2_action.triggered.connect(self.run_sam2_presegmentation)
-        primary_toolbar.addAction(sam2_action)
+        sam_preseg_action = QtWidgets.QAction(style.standardIcon(QtWidgets.QStyle.SP_ArrowForward), "SAM预分割", self)
+        sam_preseg_action.setToolTip("SAM预分割")
+        sam_preseg_action.triggered.connect(self.run_sam2_presegmentation)
+        primary_toolbar.addAction(sam_preseg_action)
 
         # 视图/测量快捷（与第一组同排）
         secondary_toolbar = QtWidgets.QToolBar("显示工具栏", self)
@@ -722,9 +722,9 @@ class UIComponents:
         unet_action = QtWidgets.QAction("基线方法", self)
         unet_action.triggered.connect(self.run_unet_segmentation)
         ai_menu.addAction(unet_action)
-        sam2_preseg_action = QtWidgets.QAction("SAM2预分割", self)
-        sam2_preseg_action.triggered.connect(self.run_sam2_presegmentation)
-        ai_menu.addAction(sam2_preseg_action)
+        sam_preseg_action = QtWidgets.QAction("SAM预分割", self)
+        sam_preseg_action.triggered.connect(self.run_sam2_presegmentation)
+        ai_menu.addAction(sam_preseg_action)
         ml_seg_action = QtWidgets.QAction("机器学习分割（KNN/集成）", self)
         ml_seg_action.triggered.connect(self.run_ml_segmentation)
         ai_menu.addAction(ml_seg_action)
@@ -922,6 +922,8 @@ class UIComponents:
             ("画笔", self.start_brush_annotation),
             ("橡皮擦", self.start_eraser_annotation),
             ("ROI绘制", self.roi_selection_start),
+            ("SAM点", self.start_sam_point_prompt),
+            ("SAM框", self.start_sam_box_prompt),
             ("长度", self.measure_distance),
             ("角度", self.measure_angle),
             ("面积", self.measure_area_placeholder),
@@ -1289,9 +1291,9 @@ class UIComponents:
         ai_auto_btn = QtWidgets.QPushButton("一键自动分割")
         ai_auto_btn.clicked.connect(self.run_unet_segmentation)
         ai_seg_layout.addWidget(ai_auto_btn)
-        sam2_preseg_btn = QtWidgets.QPushButton("SAM2预分割")
-        sam2_preseg_btn.clicked.connect(self.run_sam2_presegmentation)
-        ai_seg_layout.addWidget(sam2_preseg_btn)
+        sam_preseg_btn = QtWidgets.QPushButton("SAM预分割")
+        sam_preseg_btn.clicked.connect(self.run_sam2_presegmentation)
+        ai_seg_layout.addWidget(sam_preseg_btn)
         ml_seg_btn = QtWidgets.QPushButton("机器学习分割")
         ml_seg_btn.clicked.connect(self.run_ml_segmentation)
         ai_seg_layout.addWidget(ml_seg_btn)
@@ -2139,6 +2141,8 @@ class UIComponents:
         self.window_level_drag_mode = False
         self.window_level_roi_mode = False
         self.move_tool_enabled = False
+        self.sam_prompt_mode = None
+        self.sam_prompt_state = {'point': None, 'box': None}
 
         # 兜底：确保默认场景模式为2D+3D
         if hasattr(self, 'view_mode_combo'):
@@ -3693,6 +3697,153 @@ class UIComponents:
             viewer = getattr(self, viewer_name, None)
             if viewer:
                 viewer.slider.setValue(min(viewer.max_index - 1, viewer.slider.value() + step))
+
+    def _ensure_sam_prompt_state(self):
+        if not hasattr(self, 'sam_prompt_state') or not isinstance(self.sam_prompt_state, dict):
+            self.sam_prompt_state = {'point': None, 'box': None}
+        else:
+            if 'point' not in self.sam_prompt_state:
+                self.sam_prompt_state['point'] = None
+            if 'box' not in self.sam_prompt_state:
+                self.sam_prompt_state['box'] = None
+        if not hasattr(self, 'sam_prompt_mode'):
+            self.sam_prompt_mode = None
+
+    def start_sam_point_prompt(self):
+        if not self._prepare_annotation_environment():
+            return
+        self._ensure_sam_prompt_state()
+        self.sam_prompt_mode = 'point'
+        self.annotation_enabled = False
+        if getattr(self, 'roi_mode', None) == 'selection' and hasattr(self, 'exit_roi_mode'):
+            self.exit_roi_mode()
+        self.statusBar().showMessage("SAM点提示采集已启用：在任意切片视图 Ctrl+左键单击 即可触发单切片分割", 3500)
+
+    def start_sam_box_prompt(self):
+        if not self._prepare_annotation_environment():
+            return
+        self._ensure_sam_prompt_state()
+        self.sam_prompt_mode = 'box'
+        self.annotation_enabled = False
+        if hasattr(self, 'roi_mode') and self.roi_mode == 'selection':
+            self.statusBar().showMessage("SAM框提示采集中：请在轴位视图拖拽ROI框，完成后自动分割", 3500)
+            return
+        if hasattr(self, 'roi_selection_start'):
+            self.roi_selection_start()
+        self.statusBar().showMessage("SAM框提示采集已启用：请在轴位视图拖拽ROI框，完成后自动分割", 3500)
+
+    def clear_sam_prompt(self):
+        self._ensure_sam_prompt_state()
+        self.sam_prompt_state['point'] = None
+        self.sam_prompt_state['box'] = None
+        self.sam_prompt_mode = None
+        for viewer_name in ["axial_viewer", "cor_viewer", "sag_viewer"]:
+            viewer = getattr(self, viewer_name, None)
+            if viewer is not None and hasattr(viewer, 'clear_sam_prompt_marks'):
+                viewer.clear_sam_prompt_marks('all')
+        self.statusBar().showMessage("SAM提示已清除", 2000)
+
+    def set_sam_point_prompt(self, view_type, z, y, x, point_label=1):
+        self._ensure_sam_prompt_state()
+        view_type_str = str(view_type)
+
+        # 根据视图类型确定正确的切片轴索引
+        # axial  : slice沿Z轴, 2D图像=(Y,X), scene(px,py)→point_xy=(x,y)
+        # coronal: slice沿Y轴, 2D图像=(Z,X), scene(px,py)→point_xy=(x,z)
+        # sagittal:slice沿X轴, 2D图像=(Z,Y), scene(px,py)→point_xy=(y,z)
+        # _scene_to_voxel: axial→(z=slice,y=py,x=px)
+        #                  coronal→(z=py,y=slice,x=px)
+        #                  sagittal→(z=py,y=px,x=slice)
+        if view_type_str == 'coronal':
+            proper_slice_index = int(y)       # Y 轴切片索引
+            point_xy_2d = (int(x), int(z))    # (px, py) in coronal image (Z×X)
+        elif view_type_str == 'sagittal':
+            proper_slice_index = int(x)       # X 轴切片索引
+            point_xy_2d = (int(y), int(z))    # (px, py) in sagittal image (Z×Y)
+        else:  # axial (default)
+            proper_slice_index = int(z)
+            point_xy_2d = (int(x), int(y))
+
+        self.sam_prompt_state['point'] = {
+            'view_type': view_type_str,
+            'slice_index': proper_slice_index,
+            'x': int(x),
+            'y': int(y),
+            'z': int(z),
+            'point_label': int(point_label),
+        }
+
+        self.statusBar().showMessage(
+            f"SAM点提示已设置：{view_type_str}切片={proper_slice_index}, 点={point_xy_2d}，正在快速分割...",
+            3000,
+        )
+
+        if hasattr(self, 'run_sam_prompt_quick'):
+            self.run_sam_prompt_quick(
+                prompt_type='point',
+                view_type=view_type_str,
+                slice_index=proper_slice_index,
+                point_xy=point_xy_2d,
+                point_label=int(point_label),
+                box_xyxy=None,
+            )
+
+    def on_sam_box_prompt_from_roi(self, view_type, rect, slice_index):
+        self._ensure_sam_prompt_state()
+        if self.sam_prompt_mode != 'box':
+            return
+
+        if str(view_type) != 'axial':
+            self.statusBar().showMessage("SAM框提示当前仅支持轴位视图ROI，请在Axial视图拖拽。", 3500)
+            return
+
+        x1 = int(round(rect.left()))
+        y1 = int(round(rect.top()))
+        x2 = int(round(rect.right()))
+        y2 = int(round(rect.bottom()))
+
+        if x2 <= x1 or y2 <= y1:
+            self.statusBar().showMessage("SAM框提示无效：请重新拖拽有效矩形框。", 2500)
+            return
+
+        self.sam_prompt_state['box'] = {
+            'view_type': 'axial',
+            'slice_index': int(slice_index),
+            'x1': x1,
+            'y1': y1,
+            'x2': x2,
+            'y2': y2,
+        }
+
+        axial_viewer = getattr(self, 'axial_viewer', None)
+        if axial_viewer is not None and hasattr(axial_viewer, 'mark_sam_box_prompt'):
+            axial_viewer.mark_sam_box_prompt(rect, int(slice_index))
+
+        self.sam_prompt_mode = None
+        self.statusBar().showMessage(
+            f"SAM框提示已设置：Z={int(slice_index)}, 框=({x1},{y1},{x2},{y2})，正在快速分割...",
+            3500,
+        )
+        if hasattr(self, 'exit_roi_mode'):
+            self.exit_roi_mode()
+
+        if hasattr(self, 'run_sam_prompt_quick'):
+            self.run_sam_prompt_quick(
+                prompt_type='box',
+                slice_index=int(slice_index),
+                point_xy=None,
+                point_label=1,
+                box_xyxy=(x1, y1, x2, y2),
+            )
+
+    def get_sam_prompt_state(self):
+        self._ensure_sam_prompt_state()
+        point = self.sam_prompt_state.get('point')
+        box = self.sam_prompt_state.get('box')
+        return {
+            'point': dict(point) if isinstance(point, dict) else None,
+            'box': dict(box) if isinstance(box, dict) else None,
+        }
 
     def start_brush_annotation(self):
         if not self._prepare_annotation_environment():

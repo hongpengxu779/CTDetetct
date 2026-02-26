@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
-"""SAM2预分割对话框"""
+"""SAM预分割对话框（兼容 SAM2 / segment-anything）"""
 
 from PyQt5 import QtWidgets, QtCore
 import os
 
 
 class Sam2SegmentationDialog(QtWidgets.QDialog):
-    """SAM2预分割参数对话框"""
+    """SAM预分割参数对话框"""
 
     def __init__(self, parent=None, current_data=None):
         super().__init__(parent)
         self.parent = parent
         self.current_data = current_data
-        self.setWindowTitle("人工智能分割 - SAM2预分割")
+        self.setWindowTitle("人工智能分割 - SAM预分割")
         self.setMinimumWidth(760)
         self.setMinimumHeight(540)
 
@@ -26,10 +26,21 @@ class Sam2SegmentationDialog(QtWidgets.QDialog):
         self.stability_score_thresh = 0.95
         self.min_mask_region_area = 100
         self.overlay_with_original = True
+        self.segmentation_mode = "volume_auto"
+        self.slice_index = 0
+        self.prompt_type = "none"
+        self.point_x = 0
+        self.point_y = 0
+        self.point_label = 1
+        self.box_x1 = 0
+        self.box_y1 = 0
+        self.box_x2 = 0
+        self.box_y2 = 0
+        self.interactive_prompt_state = None
 
         main_layout = QtWidgets.QVBoxLayout(self)
 
-        param_group = QtWidgets.QGroupBox("SAM2 预分割参数")
+        param_group = QtWidgets.QGroupBox("SAM 预分割参数")
         param_layout = QtWidgets.QGridLayout()
         param_group.setLayout(param_layout)
 
@@ -64,28 +75,18 @@ class Sam2SegmentationDialog(QtWidgets.QDialog):
         self.on_source_changed()
 
         row += 1
-        param_layout.addWidget(QtWidgets.QLabel("SAM2配置文件 (yaml):"), row, 0)
-        self.model_cfg_edit = QtWidgets.QLineEdit()
-        self.model_cfg_edit.setText(self.model_cfg)
-        self.model_cfg_edit.setPlaceholderText("例如: configs/sam2.1/sam2.1_hiera_l.yaml")
-        param_layout.addWidget(self.model_cfg_edit, row, 1)
-        self.browse_cfg_btn = QtWidgets.QPushButton("浏览...")
-        self.browse_cfg_btn.clicked.connect(self.browse_model_cfg)
-        param_layout.addWidget(self.browse_cfg_btn, row, 2)
-
-        row += 1
-        param_layout.addWidget(QtWidgets.QLabel("SAM2模型权重 (*.pt/*.pth):"), row, 0)
+        param_layout.addWidget(QtWidgets.QLabel("SAM模型权重 (*.pt/*.pth):"), row, 0)
         self.checkpoint_edit = QtWidgets.QLineEdit()
-        self.checkpoint_edit.setPlaceholderText("选择SAM2模型权重文件...")
+        self.checkpoint_edit.setPlaceholderText("选择SAM模型权重文件（SAM1或SAM2）...")
         param_layout.addWidget(self.checkpoint_edit, row, 1)
         browse_checkpoint_btn = QtWidgets.QPushButton("浏览...")
         browse_checkpoint_btn.clicked.connect(self.browse_checkpoint)
         param_layout.addWidget(browse_checkpoint_btn, row, 2)
 
         row += 1
-        param_layout.addWidget(QtWidgets.QLabel("输出目录:"), row, 0)
+        param_layout.addWidget(QtWidgets.QLabel("输出目录（可选）:"), row, 0)
         self.output_dir_edit = QtWidgets.QLineEdit()
-        self.output_dir_edit.setPlaceholderText("选择分割结果保存目录...")
+        self.output_dir_edit.setPlaceholderText("可留空，默认自动保存到输入同级目录")
         param_layout.addWidget(self.output_dir_edit, row, 1)
         browse_output_btn = QtWidgets.QPushButton("浏览...")
         browse_output_btn.clicked.connect(self.browse_output_dir)
@@ -124,11 +125,84 @@ class Sam2SegmentationDialog(QtWidgets.QDialog):
         param_layout.addWidget(self.min_area_spin, row, 1)
 
         row += 1
+        param_layout.addWidget(QtWidgets.QLabel("分割模式:"), row, 0)
+        self.mode_combo = QtWidgets.QComboBox()
+        self.mode_combo.addItem("整卷自动预分割", "volume_auto")
+        self.mode_combo.addItem("单切片 + 点提示", "single_point")
+        self.mode_combo.addItem("单切片 + 矩形框提示", "single_box")
+        self.mode_combo.currentIndexChanged.connect(self.on_mode_changed)
+        param_layout.addWidget(self.mode_combo, row, 1, 1, 2)
+
+        row += 1
+        param_layout.addWidget(QtWidgets.QLabel("切片索引 (Z):"), row, 0)
+        self.slice_index_spin = QtWidgets.QSpinBox()
+        max_z = 9999
+        if isinstance(current_data, dict) and 'array' in current_data and current_data['array'] is not None:
+            try:
+                max_z = max(0, int(current_data['array'].shape[0]) - 1)
+            except Exception:
+                max_z = 9999
+        self.slice_index_spin.setRange(0, max_z)
+        self.slice_index_spin.setValue(0)
+        param_layout.addWidget(self.slice_index_spin, row, 1, 1, 2)
+
+        row += 1
+        param_layout.addWidget(QtWidgets.QLabel("点提示 (x,y):"), row, 0)
+        point_row = QtWidgets.QHBoxLayout()
+        self.point_x_spin = QtWidgets.QSpinBox()
+        self.point_x_spin.setRange(0, 10000)
+        self.point_y_spin = QtWidgets.QSpinBox()
+        self.point_y_spin.setRange(0, 10000)
+        self.point_label_combo = QtWidgets.QComboBox()
+        self.point_label_combo.addItem("前景点", 1)
+        self.point_label_combo.addItem("背景点", 0)
+        point_row.addWidget(QtWidgets.QLabel("x"))
+        point_row.addWidget(self.point_x_spin)
+        point_row.addWidget(QtWidgets.QLabel("y"))
+        point_row.addWidget(self.point_y_spin)
+        point_row.addWidget(self.point_label_combo)
+        point_widget = QtWidgets.QWidget()
+        point_widget.setLayout(point_row)
+        param_layout.addWidget(point_widget, row, 1, 1, 2)
+
+        row += 1
+        param_layout.addWidget(QtWidgets.QLabel("框提示 (x1,y1,x2,y2):"), row, 0)
+        box_row = QtWidgets.QHBoxLayout()
+        self.box_x1_spin = QtWidgets.QSpinBox(); self.box_x1_spin.setRange(0, 10000)
+        self.box_y1_spin = QtWidgets.QSpinBox(); self.box_y1_spin.setRange(0, 10000)
+        self.box_x2_spin = QtWidgets.QSpinBox(); self.box_x2_spin.setRange(0, 10000)
+        self.box_y2_spin = QtWidgets.QSpinBox(); self.box_y2_spin.setRange(0, 10000)
+        box_row.addWidget(QtWidgets.QLabel("x1")); box_row.addWidget(self.box_x1_spin)
+        box_row.addWidget(QtWidgets.QLabel("y1")); box_row.addWidget(self.box_y1_spin)
+        box_row.addWidget(QtWidgets.QLabel("x2")); box_row.addWidget(self.box_x2_spin)
+        box_row.addWidget(QtWidgets.QLabel("y2")); box_row.addWidget(self.box_y2_spin)
+        box_widget = QtWidgets.QWidget()
+        box_widget.setLayout(box_row)
+        param_layout.addWidget(box_widget, row, 1, 1, 2)
+
+        self._point_prompt_widget = point_widget
+        self._box_prompt_widget = box_widget
+
+        row += 1
+        prompt_sync_row = QtWidgets.QHBoxLayout()
+        self.prompt_sync_label = QtWidgets.QLabel("标注联动提示：未读取")
+        self.prompt_sync_label.setStyleSheet("color: #666;")
+        prompt_sync_row.addWidget(self.prompt_sync_label)
+        prompt_sync_row.addStretch()
+        refresh_prompt_btn = QtWidgets.QPushButton("读取标注提示")
+        refresh_prompt_btn.clicked.connect(self.refresh_interactive_prompt_state)
+        prompt_sync_row.addWidget(refresh_prompt_btn)
+        prompt_sync_widget = QtWidgets.QWidget()
+        prompt_sync_widget.setLayout(prompt_sync_row)
+        param_layout.addWidget(prompt_sync_widget, row, 0, 1, 3)
+
+        row += 1
         info_label = QtWidgets.QLabel(
             "说明:\n"
-            "• 当前实现按切片执行SAM2自动掩膜，再融合为3D二值体。\n"
+            "• 支持整卷自动预分割，或对单切片使用点/框提示分割。\n"
+            "• 优先使用SAM2；若不可用则自动回退到SAM1（segment-anything）。\n"
             "• 该结果定位为预分割，可作为后续编辑与精修的初稿。\n"
-            "• 需先安装 sam2 官方库并准备 cfg + checkpoint。"
+            "• 按官方示例，仅需模型权重（checkpoint）；无需手动选择SAM2配置文件。"
         )
         info_label.setWordWrap(True)
         info_label.setStyleSheet("color: #666; font-size: 9pt; padding: 10px;")
@@ -172,11 +246,67 @@ class Sam2SegmentationDialog(QtWidgets.QDialog):
         cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(cancel_button)
         main_layout.addLayout(button_layout)
+        self.refresh_interactive_prompt_state()
+        self.on_mode_changed()
 
     def on_source_changed(self):
         use_file = self.use_file_radio.isChecked()
         self.input_file_edit.setEnabled(use_file)
         self.browse_input_btn.setEnabled(use_file)
+
+    def on_mode_changed(self):
+        mode = self.mode_combo.currentData()
+        is_single = mode in ("single_point", "single_box")
+        self.slice_index_spin.setEnabled(is_single)
+        self._point_prompt_widget.setVisible(mode == "single_point")
+        self._box_prompt_widget.setVisible(mode == "single_box")
+
+    def refresh_interactive_prompt_state(self):
+        state = None
+        if self.parent is not None and hasattr(self.parent, 'get_sam_prompt_state'):
+            try:
+                state = self.parent.get_sam_prompt_state()
+            except Exception:
+                state = None
+
+        if not isinstance(state, dict):
+            state = {'point': None, 'box': None}
+
+        self.interactive_prompt_state = state
+
+        point_state = state.get('point')
+        box_state = state.get('box')
+
+        if isinstance(point_state, dict):
+            self.slice_index_spin.setValue(int(point_state.get('slice_index', 0)))
+            self.point_x_spin.setValue(int(point_state.get('x', 0)))
+            self.point_y_spin.setValue(int(point_state.get('y', 0)))
+            lbl = int(point_state.get('point_label', 1))
+            idx = self.point_label_combo.findData(lbl)
+            if idx >= 0:
+                self.point_label_combo.setCurrentIndex(idx)
+
+        if isinstance(box_state, dict):
+            self.slice_index_spin.setValue(int(box_state.get('slice_index', 0)))
+            self.box_x1_spin.setValue(int(box_state.get('x1', 0)))
+            self.box_y1_spin.setValue(int(box_state.get('y1', 0)))
+            self.box_x2_spin.setValue(int(box_state.get('x2', 0)))
+            self.box_y2_spin.setValue(int(box_state.get('y2', 0)))
+
+        summary = []
+        if isinstance(point_state, dict):
+            summary.append(
+                f"点(Z={int(point_state.get('slice_index', 0))}, x={int(point_state.get('x', 0))}, y={int(point_state.get('y', 0))})"
+            )
+        if isinstance(box_state, dict):
+            summary.append(
+                f"框(Z={int(box_state.get('slice_index', 0))}, {int(box_state.get('x1', 0))},{int(box_state.get('y1', 0))},{int(box_state.get('x2', 0))},{int(box_state.get('y2', 0))})"
+            )
+
+        if summary:
+            self.prompt_sync_label.setText("标注联动提示：" + "；".join(summary))
+        else:
+            self.prompt_sync_label.setText("标注联动提示：未采集到点/框")
 
     def browse_input_file(self):
         filename, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -185,16 +315,9 @@ class Sam2SegmentationDialog(QtWidgets.QDialog):
         if filename:
             self.input_file_edit.setText(filename)
 
-    def browse_model_cfg(self):
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "选择SAM2配置文件", "", "YAML文件 (*.yaml *.yml);;所有文件 (*)"
-        )
-        if filename:
-            self.model_cfg_edit.setText(filename)
-
     def browse_checkpoint(self):
         filename, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "选择SAM2模型权重文件", "", "PyTorch模型文件 (*.pth *.pt);;所有文件 (*)"
+            self, "选择SAM模型权重文件", "", "PyTorch模型文件 (*.pth *.pt);;所有文件 (*)"
         )
         if filename:
             self.checkpoint_edit.setText(filename)
@@ -222,14 +345,11 @@ class Sam2SegmentationDialog(QtWidgets.QDialog):
                 return
             self.input_file = input_file
 
-        model_cfg = self.model_cfg_edit.text().strip()
-        if not model_cfg:
-            QtWidgets.QMessageBox.warning(self, "输入错误", "请填写SAM2配置文件路径。")
-            return
+        model_cfg = self.model_cfg
 
         checkpoint_path = self.checkpoint_edit.text().strip()
         if not checkpoint_path:
-            QtWidgets.QMessageBox.warning(self, "输入错误", "请选择SAM2模型权重文件。")
+            QtWidgets.QMessageBox.warning(self, "输入错误", "请选择SAM模型权重文件。")
             return
         if not os.path.exists(checkpoint_path):
             QtWidgets.QMessageBox.warning(self, "输入错误", f"模型权重文件不存在：\n{checkpoint_path}")
@@ -237,8 +357,12 @@ class Sam2SegmentationDialog(QtWidgets.QDialog):
 
         output_dir = self.output_dir_edit.text().strip()
         if not output_dir:
-            QtWidgets.QMessageBox.warning(self, "输入错误", "请选择输出目录。")
-            return
+            if self.use_current_data:
+                output_dir = os.path.join(os.getcwd(), "sam_preseg_output")
+            else:
+                output_dir = os.path.join(os.path.dirname(self.input_file), "sam_preseg_output")
+
+        os.makedirs(output_dir, exist_ok=True)
 
         self.model_cfg = model_cfg
         self.checkpoint_path = checkpoint_path
@@ -247,6 +371,40 @@ class Sam2SegmentationDialog(QtWidgets.QDialog):
         self.pred_iou_thresh = self.pred_iou_spin.value()
         self.stability_score_thresh = self.stability_spin.value()
         self.min_mask_region_area = self.min_area_spin.value()
+        self.segmentation_mode = self.mode_combo.currentData()
+        self.slice_index = int(self.slice_index_spin.value())
+        state = self.interactive_prompt_state if isinstance(self.interactive_prompt_state, dict) else {}
+        if self.segmentation_mode == "single_point":
+            self.prompt_type = "point"
+            point_state = state.get('point') if isinstance(state, dict) else None
+            if isinstance(point_state, dict):
+                self.slice_index = int(point_state.get('slice_index', self.slice_index))
+                self.point_x = int(point_state.get('x', self.point_x_spin.value()))
+                self.point_y = int(point_state.get('y', self.point_y_spin.value()))
+                self.point_label = int(point_state.get('point_label', self.point_label_combo.currentData()))
+            else:
+                self.point_x = int(self.point_x_spin.value())
+                self.point_y = int(self.point_y_spin.value())
+                self.point_label = int(self.point_label_combo.currentData())
+        elif self.segmentation_mode == "single_box":
+            self.prompt_type = "box"
+            box_state = state.get('box') if isinstance(state, dict) else None
+            if isinstance(box_state, dict):
+                self.slice_index = int(box_state.get('slice_index', self.slice_index))
+                self.box_x1 = int(box_state.get('x1', self.box_x1_spin.value()))
+                self.box_y1 = int(box_state.get('y1', self.box_y1_spin.value()))
+                self.box_x2 = int(box_state.get('x2', self.box_x2_spin.value()))
+                self.box_y2 = int(box_state.get('y2', self.box_y2_spin.value()))
+            else:
+                self.box_x1 = int(self.box_x1_spin.value())
+                self.box_y1 = int(self.box_y1_spin.value())
+                self.box_x2 = int(self.box_x2_spin.value())
+                self.box_y2 = int(self.box_y2_spin.value())
+            if self.box_x2 <= self.box_x1 or self.box_y2 <= self.box_y1:
+                QtWidgets.QMessageBox.warning(self, "输入错误", "矩形框必须满足 x2>x1 且 y2>y1。")
+                return
+        else:
+            self.prompt_type = "none"
         self.overlay_with_original = self.overlay_checkbox.isChecked()
         self.accept()
 
@@ -271,6 +429,12 @@ class Sam2SegmentationDialog(QtWidgets.QDialog):
             "pred_iou_thresh": self.pred_iou_thresh,
             "stability_score_thresh": self.stability_score_thresh,
             "min_mask_region_area": self.min_mask_region_area,
+            "segmentation_mode": self.segmentation_mode,
+            "slice_index": self.slice_index,
+            "prompt_type": self.prompt_type,
+            "point_xy": (self.point_x, self.point_y),
+            "point_label": self.point_label,
+            "box_xyxy": (self.box_x1, self.box_y1, self.box_x2, self.box_y2),
             "overlay_with_original": self.overlay_with_original,
             "overlay_alpha": self.alpha_slider.value() / 100.0,
             "overlay_color": color_map[self.color_combo.currentText()]

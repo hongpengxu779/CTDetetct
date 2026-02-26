@@ -487,6 +487,70 @@ class VolumeViewer(QtWidgets.QFrame):
         if render:
             self._render()
 
+    def update_mask_overlay(self, mask_array, spacing=None, color_rgb=(0, 255, 0), alpha=0.55):
+        """
+        在三维3D体渲染视图中叠加分割掩码。
+        mask_array : np.ndarray (Z,Y,X) uint8/bool, 非零0为掩码区域。
+        color_rgb  : tuple(R,G,B) 0-255.
+        alpha      : 掩码区域不透明度 (0-1).
+        """
+        # 移除旧的掩码actor
+        if hasattr(self, '_mask_volume') and self._mask_volume is not None:
+            try:
+                self.renderer.RemoveVolume(self._mask_volume)
+            except Exception:
+                pass
+            self._mask_volume = None
+
+        mask = (mask_array > 0).astype(np.uint8) * 255
+        if not mask.any():
+            self._render()
+            return
+
+        z, y, x = mask.shape
+        sp = spacing if spacing is not None else (1.0, 1.0, 1.0)
+        # 如果体渲染层有降采样，掩码也应尔近估算指定空间
+
+        importer = vtk.vtkImageImport()
+        data_bytes = np.ascontiguousarray(mask).tobytes()
+        importer.CopyImportVoidPointer(data_bytes, len(data_bytes))
+        importer.SetDataScalarTypeToUnsignedChar()
+        importer.SetNumberOfScalarComponents(1)
+        importer.SetWholeExtent(0, x-1, 0, y-1, 0, z-1)
+        importer.SetDataExtentToWholeExtent()
+        importer.SetDataSpacing(sp)
+        importer.Update()
+
+        mapper = vtk.vtkGPUVolumeRayCastMapper()
+        mapper.SetInputConnection(importer.GetOutputPort())
+        mapper.SetBlendModeToComposite()
+
+        r, g, b = color_rgb[0]/255.0, color_rgb[1]/255.0, color_rgb[2]/255.0
+        color_func = vtk.vtkColorTransferFunction()
+        color_func.AddRGBPoint(0,   0.0, 0.0, 0.0)
+        color_func.AddRGBPoint(128, r,   g,   b)
+        color_func.AddRGBPoint(255, r,   g,   b)
+
+        opacity_func = vtk.vtkPiecewiseFunction()
+        opacity_func.AddPoint(0,   0.0)
+        opacity_func.AddPoint(64,  0.0)
+        opacity_func.AddPoint(128, float(alpha))
+        opacity_func.AddPoint(255, float(alpha))
+
+        prop = vtk.vtkVolumeProperty()
+        prop.SetColor(color_func)
+        prop.SetScalarOpacity(opacity_func)
+        prop.SetInterpolationTypeToLinear()
+        prop.ShadeOff()
+
+        mask_vol = vtk.vtkVolume()
+        mask_vol.SetMapper(mapper)
+        mask_vol.SetProperty(prop)
+
+        self.renderer.AddVolume(mask_vol)
+        self._mask_volume = mask_vol
+        self._render()
+
     def _render(self):
         if hasattr(self, 'renderer') and self.renderer is not None:
             self.renderer.GetRenderWindow().Render()
