@@ -458,72 +458,19 @@ class AIOperations:
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "错误", f"运行SAM预分割时出错：{str(e)}")
 
-    @staticmethod
-    def _make_sam_overlay_slice_fn(base_array, accum_mask, view_type, parent_viewer, color_rgb):
-        """
-        构造一个 get_slice(idx) 函数：读取 base_array 原始切片，
-        应用窗宽窗位，然后将 accum_mask 以 color_rgb 颜色叠加显示。
-        不修改 base_array / accum_mask，每次调用实时混合。
-        """
-        import numpy as np
-        alpha = 0.50
-        cr, cg, cb = float(color_rgb[0]), float(color_rgb[1]), float(color_rgb[2])
-
-        def get_slice(idx):
-            # 1. 提取对应视图轴的原始2D切片和掩码
-            if view_type == 'coronal':
-                raw2d  = base_array[:, idx, :]
-                mask2d = accum_mask[:, idx, :]
-            elif view_type == 'sagittal':
-                raw2d  = base_array[:, :, idx]
-                mask2d = accum_mask[:, :, idx]
-            else:  # axial
-                raw2d  = base_array[idx, :, :]
-                mask2d = accum_mask[idx, :, :]
-
-            # 2. 应用窗宽窗位，返回 uint16（0-65535），与 array_to_qpixmap 灰度路径一致
-            if hasattr(parent_viewer, 'apply_window_level_to_slice'):
-                display = parent_viewer.apply_window_level_to_slice(raw2d)
-            else:
-                dmin = float(raw2d.min())
-                dmax = float(raw2d.max())
-                if dmax > dmin:
-                    display = ((raw2d.astype(np.float32) - dmin) / (dmax - dmin) * 65535).astype(np.uint16)
-                else:
-                    display = np.zeros(raw2d.shape, dtype=np.uint16)
-
-            # 3. 无掩码切片：直接返回 uint16，array_to_qpixmap 会正确归一化
-            if not mask2d.any():
-                return display
-
-            # 4. 有掩码：将 uint16 正确归一化为 uint8 灰度，再 RGB 混色
-            gray8 = (display.astype(np.float32) / 65535.0 * 255.0).astype(np.uint8)
-            rgb = np.stack([gray8, gray8, gray8], axis=-1).astype(np.float32)
-            m = mask2d > 0
-            rgb[m, 0] = rgb[m, 0] * (1.0 - alpha) + cr * alpha
-            rgb[m, 1] = rgb[m, 1] * (1.0 - alpha) + cg * alpha
-            rgb[m, 2] = rgb[m, 2] * (1.0 - alpha) + cb * alpha
-            return np.clip(rgb, 0, 255).astype(np.uint8)
-
-        return get_slice
-
     def _sam_apply_overlay_to_viewers(self, runtime, color_rgb, point_xy, slice_index, view_type):
-        """更新三个2D viewer 的 get_slice 实时叠加mask，同时更新3D体渲染中的mask overlay。"""
-        base_array  = runtime['base_array']
-        accum_mask  = runtime['accum_mask']
+        """刷新2D视图（SAM结果通过标注overlay显示，与画笔/橡皮擦同一套），并更新3D体渲染mask overlay。
 
-        # --- 2D viewer 更新 ---
-        viewer_map = [
-            ('axial_viewer',  'axial'),
-            ('cor_viewer',    'coronal'),
-            ('sag_viewer',    'sagittal'),
-        ]
-        for viewer_attr, vtype in viewer_map:
+        2D切片视图不再替换 get_slice，SAM掩码已写入 annotation_volume，
+        由标注系统的 annotation_overlay_item 负责渲染，使画笔/橡皮擦可直接编辑。
+        """
+        accum_mask = runtime['accum_mask']
+
+        # --- 2D viewer：SAM 结果已写入 annotation_volume，刷新标注 overlay 即可 ---
+        for viewer_attr in ('axial_viewer', 'cor_viewer', 'sag_viewer'):
             viewer = getattr(self, viewer_attr, None)
             if viewer is None:
                 continue
-            viewer.get_slice = self._make_sam_overlay_slice_fn(
-                base_array, accum_mask, vtype, self, color_rgb)
             viewer._refresh_current_slice()
 
         # --- 3D viewer 更新（在原始体数据上叠加一个独立的 mask volume actor）---
@@ -540,6 +487,147 @@ class AIOperations:
             if point_xy is not None and hasattr(self, 'sync_crosshair_from_view'):
                 self.sync_crosshair_from_view(
                     str(view_type), int(point_xy[0]), int(point_xy[1]), int(slice_index))
+        except Exception:
+            pass
+
+    def _sam_import_to_annotation(self, mask_2d, view_type_str, slice_index, color_rgb=(0, 255, 0)):
+        """将 SAM 分割结果（2D mask）写入标注系统（annotation_volume / annotation_drawn_mask）。
+
+        写入时使用当前标注标签号；若标签为 0 则自动用标签 1。
+        同时将 color_rgb 写入 annotation_label_colors，使 2D overlay 与 3D VTK overlay 颜色一致。
+        返回实际写入的 label 值（int）。
+        """
+        import numpy as np
+
+        # 确保 annotation_volume / annotation_drawn_mask 已初始化
+        if not hasattr(self, '_prepare_annotation_environment'):
+            return 0
+        if not self._prepare_annotation_environment():
+            return 0
+
+        # 获取当前标注标签号；若为 0（默认/背景），自动使用标签 1
+        if hasattr(self, 'get_current_annotation_label'):
+            label = int(self.get_current_annotation_label())
+        else:
+            label = 1
+        if label <= 0:
+            label = 1  # 标签 0 为背景，SAM 结果默认归入标签 1
+
+        # 同步标注颜色表，确保 2D overlay 与 3D VTK overlay 颜色一致
+        if hasattr(self, 'annotation_label_colors'):
+            self.annotation_label_colors[label] = tuple(int(c) for c in color_rgb)
+
+        av = self.annotation_volume          # uint16 (Z, Y, X)
+        dm = self.annotation_drawn_mask      # bool   (Z, Y, X)
+        z_dim, y_dim, x_dim = av.shape
+
+        mask_bool = mask_2d > 0
+        s_idx = int(slice_index)
+
+        if view_type_str == 'coronal':
+            # 冠状面：slice_index 对应 Y 轴，图像维度 (Z, X)
+            if 0 <= s_idx < y_dim:
+                h = min(z_dim, mask_bool.shape[0])
+                w = min(x_dim, mask_bool.shape[1])
+                av[:h, s_idx, :w][mask_bool[:h, :w]] = label
+                dm[:h, s_idx, :w][mask_bool[:h, :w]] = True
+        elif view_type_str == 'sagittal':
+            # 矢状面：slice_index 对应 X 轴，图像维度 (Z, Y)
+            if 0 <= s_idx < x_dim:
+                h = min(z_dim, mask_bool.shape[0])
+                w = min(y_dim, mask_bool.shape[1])
+                av[:h, :w, s_idx][mask_bool[:h, :w]] = label
+                dm[:h, :w, s_idx][mask_bool[:h, :w]] = True
+        else:  # axial
+            # 轴位：slice_index 对应 Z 轴，图像维度 (Y, X)
+            if 0 <= s_idx < z_dim:
+                h = min(y_dim, mask_bool.shape[0])
+                w = min(x_dim, mask_bool.shape[1])
+                av[s_idx, :h, :w][mask_bool[:h, :w]] = label
+                dm[s_idx, :h, :w][mask_bool[:h, :w]] = True
+
+        # 刷新三个 viewer 的标注覆盖层
+        if hasattr(self, 'refresh_annotation_overlays'):
+            self.refresh_annotation_overlays()
+
+        return label
+
+    def _sam_register_annotation_in_data_list(self, label, color_rgb):
+        """将当前 annotation_volume 作为标签数据项注册到数据列表。
+
+        直接操作 data_list_widget，不调用 add_data_to_list / switch_to_data，
+        避免触发 on_data_selection_changed 重建 viewer 和重置切片位置。
+        """
+        import SimpleITK as sitk
+        from PyQt5 import QtCore, QtWidgets
+
+        if not hasattr(self, 'data_list_widget') or not hasattr(self, 'annotation_volume'):
+            return
+
+        # 移除旧的 SAM 标注条目
+        rows_to_remove = []
+        for i in range(self.data_list_widget.count()):
+            item = self.data_list_widget.item(i)
+            if item is None:
+                continue
+            d = item.data(QtCore.Qt.UserRole)
+            if isinstance(d, dict) and d.get('label_source') == 'sam_annotation':
+                rows_to_remove.append(i)
+        for row in reversed(rows_to_remove):
+            self.data_list_widget.takeItem(row)
+
+        try:
+            label_image = sitk.GetImageFromArray(self.annotation_volume.astype('uint16'))
+            if hasattr(self, 'image') and self.image is not None:
+                label_image.CopyInformation(self.image)
+        except Exception:
+            label_image = None
+
+        unique_vals = sorted(set(int(v) for v in self.annotation_volume.flat if v > 0))
+        color_map = {int(label): tuple(int(c) for c in color_rgb)}
+
+        data_item = {
+            'image': label_image,
+            'array': self.annotation_volume.astype('uint16').copy(),
+            'shape': self.annotation_volume.shape,
+            'spacing': getattr(self, 'spacing', (1.0, 1.0, 1.0)),
+            'rgb_array': None,
+            'is_segmentation': True,
+            'data_type': 'label',
+            'label_source': 'sam_annotation',
+            'label_values': unique_vals,
+            'label_color_map': color_map,
+            'label_path': None,
+            'annotation_drawn_mask': (
+                self.annotation_drawn_mask.copy()
+                if hasattr(self, 'annotation_drawn_mask') else None
+            ),
+        }
+
+        dataset_name = f"SAM分割 [标签{label}]"
+
+        # 直接向列表插入条目，不触发 currentItemChanged / switch_to_data
+        list_item = QtWidgets.QListWidgetItem(dataset_name)
+        list_item.setFlags(QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable)
+        list_item.setData(QtCore.Qt.UserRole, data_item)
+        list_item.setData(QtCore.Qt.UserRole + 1, True)  # visible
+
+        # 暂时断开 currentItemChanged 信号，避免 switch_to_data 被触发
+        try:
+            self.data_list_widget.currentItemChanged.disconnect(self.on_data_selection_changed)
+        except Exception:
+            pass
+
+        self.data_list_widget.addItem(list_item)
+
+        if hasattr(self, '_build_dataset_list_item_widget'):
+            item_widget = self._build_dataset_list_item_widget(list_item, dataset_name)
+            list_item.setSizeHint(item_widget.sizeHint())
+            self.data_list_widget.setItemWidget(list_item, item_widget)
+
+        # 重新连接信号
+        try:
+            self.data_list_widget.currentItemChanged.connect(self.on_data_selection_changed)
         except Exception:
             pass
 
@@ -699,12 +787,27 @@ class AIOperations:
 
             # ---------- 更新 viewer get_slice 函数并刷新（不重建viewer） ----------
             color_rgb = (0, 255, 0) if str(prompt_type) == 'point' else (255, 0, 255)
+
+            # ---------- 联动：将 SAM mask 写入标注系统（annotation_volume） ----------
+            _used_label = 1
+            try:
+                _used_label = self._sam_import_to_annotation(
+                    mask_2d, view_type_str, s_idx, color_rgb=color_rgb) or 1
+            except Exception as _e:
+                print(f"SAM 掩码写入标注系统失败（不影响显示）: {_e}")
+
+            # ---------- 将 annotation_volume 注册到数据列表 ----------
+            try:
+                self._sam_register_annotation_in_data_list(_used_label, color_rgb)
+            except Exception as _e:
+                print(f"SAM 标注注册数据列表失败（不影响显示）: {_e}")
+
             self._sam_apply_overlay_to_viewers(runtime, color_rgb, point_xy, slice_index, view_type)
 
             if hasattr(self, 'statusBar'):
                 self.statusBar().showMessage(
-                    f"SAM快速分割完成：{view_type_str} 切片={s_idx}，掩码已叠加显示",
-                    4500,
+                    f"SAM快速分割完成：{view_type_str} 切片={s_idx}，结果已写入标注层，可用画笔/橡皮擦继续编辑",
+                    5000,
                 )
 
         except Exception as e:
